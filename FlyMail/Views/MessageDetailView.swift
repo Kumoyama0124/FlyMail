@@ -28,6 +28,10 @@ struct MessageDetailView: View {
     @State private var attachmentURLs: [String: URL] = [:]
 
     @State private var confirmDelete = false
+    /// 本封邮件是否已允许加载远程图片（默认拦截；VIP 发件人视为可信，自动加载）
+    @State private var loadRemote = false
+
+    private var allowRemote: Bool { loadRemote || VIPStore.contains(message.from) }
 
     var body: some View {
         ScrollView {
@@ -44,7 +48,8 @@ struct MessageDetailView: View {
                         .frame(maxWidth: .infinity).padding(.top, 30)
                 }
                 else if showHTML, let html = message.bodyHTML {
-                    MailHTMLView(html: html, height: $htmlHeight).frame(height: htmlHeight)
+                    if !allowRemote && MailHTMLView.hasRemoteContent(html) { remoteBanner }
+                    MailHTMLView(html: html, allowRemote: allowRemote, height: $htmlHeight).frame(height: htmlHeight)
                 } else {
                     PlainTextBody(text: message.bodyText)
                 }
@@ -64,11 +69,13 @@ struct MessageDetailView: View {
                     }
                     MessageMenuItems(message: message, movingMessage: $moving)
                 } label: { Image(systemName: "ellipsis.circle") }
+                .accessibilityLabel("更多")
             }
         }
         // 不用自定义材质盖导航栏：iOS 27 系统导航栏本身就是液态玻璃。
         .navigationBarTitleDisplayMode(.inline)
         .task(id: message.persistentModelID) { await load(); refreshAttachmentURLs() }
+        .onChange(of: message.persistentModelID) { _, _ in loadRemote = false }
         .sheet(item: $moving) { MoveFolderPicker(message: $0) }
         .sheet(item: $previewURL) { QuickLookView(url: $0).ignoresSafeArea() }
         .confirmationDialog(isTrashLike ? "永久删除这封邮件？" : "删除这封邮件？", isPresented: $confirmDelete, titleVisibility: .visible) {
@@ -84,9 +91,11 @@ struct MessageDetailView: View {
         // 否则两层玻璃叠在一起会发灰、边缘发重，看起来很奇怪。
         HStack(spacing: 0) {
             Button { step(-1) } label: { Image(systemName: "chevron.up").frame(width: 34, height: 30) }
+                .accessibilityLabel("上一封")
                 .disabled((index ?? 0) <= 0)
             Divider().frame(height: 16)
             Button { step(1) } label: { Image(systemName: "chevron.down").frame(width: 34, height: 30) }
+                .accessibilityLabel("下一封")
                 .disabled(index.map { $0 >= app.messageOrder.count - 1 } ?? true)
         }
         .font(.body.weight(.semibold))
@@ -109,6 +118,7 @@ struct MessageDetailView: View {
                     Button("转发", systemImage: "arrowshape.turn.up.right") { forward() }
                 } label: {
                     Image(systemName: "arrowshape.turn.up.left").font(.title3).frame(width: 52, height: 46)
+                        .accessibilityLabel("回复与转发")
                 } primaryAction: { reply(all: false) }
             }
             .padding(.horizontal, 6)
@@ -121,6 +131,7 @@ struct MessageDetailView: View {
                 app.composeDraft = ComposeDraft(accountID: message.folder?.account?.id)
             } label: {
                 Image(systemName: "square.and.pencil").font(.title3).frame(width: 50, height: 50)
+                    .accessibilityLabel("写邮件")
             }
             .background { Circle().glassEffect(.regular, in: Circle()) }
         }
@@ -129,6 +140,22 @@ struct MessageDetailView: View {
 
     private func barButton(_ icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) { Image(systemName: icon).font(.title3).frame(width: 52, height: 46) }
+            .accessibilityLabel(icon == "trash" ? "删除" : "移动")
+    }
+
+    /// 被拦截远程内容时的提示条（类似苹果邮件的“隐私保护”），一键加载本封邮件的图片
+    private var remoteBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "photo").foregroundStyle(.secondary)
+            Text("已拦截远程图片，防止发件人得知你是否打开了邮件。")
+                .font(.footnote).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 4)
+            Button("加载图片") { withAnimation(.snappy) { loadRemote = true } }
+                .buttonStyle(.bordered).controlSize(.small)
+        }
+        .padding(10)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
     }
 
     private func deleteCurrent() {
@@ -226,7 +253,7 @@ struct MessageDetailView: View {
                 HStack {
                     Button {
                         Task { await open(name) }
-                    } label: { Label(name, systemImage: "paperclip").lineLimit(1) }
+                    } label: { Label(name, systemImage: Self.attachmentIcon(name)).lineLimit(1) }
                     Spacer()
                     if let url = attachmentURLs[name] {
                         ShareLink(item: url) { Image(systemName: "square.and.arrow.up") }
@@ -236,6 +263,22 @@ struct MessageDetailView: View {
                 .padding(8)
                 .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
             }
+        }
+    }
+
+    /// 按扩展名给附件配图标，一眼分清图片/文档/压缩包
+    static func attachmentIcon(_ name: String) -> String {
+        switch (name as NSString).pathExtension.lowercased() {
+        case "jpg", "jpeg", "png", "gif", "heic", "webp": return "photo"
+        case "pdf": return "doc.richtext"
+        case "doc", "docx", "pages", "txt", "rtf", "md": return "doc.text"
+        case "xls", "xlsx", "csv", "numbers": return "tablecells"
+        case "ppt", "pptx", "key": return "play.rectangle"
+        case "zip", "rar", "7z", "gz", "tar": return "doc.zipper"
+        case "mp3", "m4a", "wav", "aac": return "waveform"
+        case "mp4", "mov", "m4v": return "film"
+        case "ics": return "calendar"
+        default: return "paperclip"
         }
     }
 

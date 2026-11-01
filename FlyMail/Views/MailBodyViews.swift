@@ -5,6 +5,8 @@ import SafariServices
 /// 手机友好的 HTML 正文：自适应高度、缩放适配、深色模式、只运行我们自己的排版脚本
 struct MailHTMLView: UIViewRepresentable {
     let html: String
+    /// false：拦截远程图片/样式/字体（防止发件人通过追踪像素得知你打开了邮件）
+    var allowRemote: Bool = true
     @Binding var height: CGFloat
     @Environment(\.colorScheme) private var scheme
 
@@ -26,10 +28,10 @@ struct MailHTMLView: UIViewRepresentable {
     }
 
     func updateUIView(_ v: WKWebView, context: Context) {
-        let key = "\(html.hashValue)-\(scheme == .dark)"
+        let key = "\(html.hashValue)-\(scheme == .dark)-\(allowRemote)"
         guard context.coordinator.loadedKey != key else { return }
         context.coordinator.loadedKey = key
-        v.loadHTMLString(Self.document(html, dark: scheme == .dark), baseURL: nil)
+        v.loadHTMLString(Self.document(html, dark: scheme == .dark, allowRemote: allowRemote), baseURL: nil)
     }
 
     static func sanitize(_ html: String) -> String {
@@ -41,8 +43,20 @@ struct MailHTMLView: UIViewRepresentable {
             .replacingOccurrences(of: #"(<table[^>]*?)\swidth\s*=\s*["']?\d{3,4}(px)?["']?"#, with: "$1 width=\"100%\"", options: [.regularExpression, .caseInsensitive])
     }
 
-    static func document(_ raw: String, dark: Bool) -> String {
+    /// 邮件里是否有需要联网加载的内容（远程图片、CSS 背景图、背景属性）
+    static func hasRemoteContent(_ html: String) -> Bool {
+        let patterns = [#"<img[^>]+src\s*=\s*["']?\s*(https?:)?//"#,
+                        #"url\(\s*["']?\s*(https?:)?//"#,
+                        #"\sbackground\s*=\s*["']?\s*(https?:)?//"#]
+        return patterns.contains { html.range(of: $0, options: [.regularExpression, .caseInsensitive]) != nil }
+    }
+
+    static func document(_ raw: String, dark: Bool, allowRemote: Bool = true) -> String {
         let nonce = UUID().uuidString
+        // 默认放行远程内容；allowRemote == false 时只允许内嵌(data:)资源，脚本仍只认我们自己的 nonce
+        let csp = allowRemote
+            ? "default-src 'none'; img-src * data: blob:; style-src 'unsafe-inline' *; font-src * data:; media-src *; script-src 'nonce-\(nonce)'"
+            : "default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; font-src data:; media-src 'none'; script-src 'nonce-\(nonce)'"
         let lower = raw.lowercased()
         // 有自己背景色的“设计型”邮件保持浅色，避免反色
         let designed = lower.contains("bgcolor") || lower.contains("background:") || lower.contains("background-color")
@@ -52,7 +66,7 @@ struct MailHTMLView: UIViewRepresentable {
         return """
         <!doctype html><html><head><meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
-        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src * data: blob:; style-src 'unsafe-inline' *; font-src * data:; media-src *; script-src 'nonce-\(nonce)'">
+        <meta http-equiv="Content-Security-Policy" content="\(csp)">
         <style>
         html,body{margin:0;padding:0;-webkit-text-size-adjust:100%}
         body{font:-apple-system-body;font-family:-apple-system,"PingFang SC",sans-serif;line-height:1.5;word-wrap:break-word;overflow-wrap:anywhere}
