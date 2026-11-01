@@ -108,8 +108,13 @@ struct AIChatView: View {
                 // 侧栏展开时通知 RootView 收起底部 dock，避免 dock 压住侧栏右下角内容。
                 app.isAIHistorySidebarOpen = open
             }
+            .onChange(of: focused) { _, isFocused in
+                // 键盘弹出时 dock 让位，输入框顶格贴住键盘；收起键盘后 dock 回来。
+                app.isAIComposerFocused = isFocused
+            }
             .onDisappear {
                 app.isAIHistorySidebarOpen = false
+                app.isAIComposerFocused = false
             }
             .alert(
                 "AI 请求失败",
@@ -236,8 +241,9 @@ struct AIChatView: View {
             composer
                 .padding(.horizontal, 14)
                 .padding(.top, 8)
-                // Dock 独立悬浮在 RootView 上；为它预留空间，但输入框自身始终参与纵向布局。
-                .padding(.bottom, 76)
+                // Dock 悬浮在 RootView 上；键盘弹出时 dock 让位，预留空间同步收窄，输入框顶格贴住键盘。
+                .padding(.bottom, focused ? 8 : 76)
+                .animation(.spring(response: 0.32, dampingFraction: 0.86), value: focused)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(uiColor: .systemGroupedBackground))

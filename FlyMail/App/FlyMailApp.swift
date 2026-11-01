@@ -62,4 +62,6 @@ final class AppState {
     var dockTab: DockTab = .home
     /// AI 历史侧栏是否展开：展开时底部 dock 整条让位，不再压住侧栏右下角内容
     var isAIHistorySidebarOpen = false
+    /// AI 输入框获得焦点（键盘弹出）时 dock 同样让位，输入框顶格贴住键盘
+    var isAIComposerFocused = false
 }

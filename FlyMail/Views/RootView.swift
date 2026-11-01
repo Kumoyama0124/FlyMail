@@ -97,10 +97,11 @@ struct RootView: View {
     }
 
     /// 邮件栏目里打开了详情页时不显示 dock，详情页自己的底部栏在底下；
-    /// AI 历史侧栏全屏展开时 dock 也不显示——侧栏有自己的关闭按钮和底部操作区，
-    /// 底下再浮一条 dock 只会遮住侧栏右下角的内容。
+    /// AI 历史侧栏全屏展开、或 AI 输入框聚焦（键盘弹出）时 dock 也不显示——
+    /// 这两种情况 dock 只会挡路，输入框应该顶格贴住键盘。
     private var dockVisible: Bool {
-        sizeClass == .compact && showDock && !app.isAIHistorySidebarOpen
+        sizeClass == .compact && showDock
+            && !app.isAIHistorySidebarOpen && !app.isAIComposerFocused
     }
 
     private var showDock: Bool {
