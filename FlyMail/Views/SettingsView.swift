@@ -458,8 +458,26 @@ struct AISettingsView: View {
 
             Section {
                 Toggle("自动整理长期记忆", isOn: $memoryEnabled)
+
+                HStack(spacing: 10) {
+                    Image(systemName: memoryEnabled ? "sparkles.rectangle.stack" : "pause.circle")
+                        .font(.title2)
+                        .foregroundStyle(memoryEnabled ? Color.accentColor : Color.secondary)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(memoryEnabled ? "自动整理已开启" : "自动整理已暂停")
+                            .font(.subheadline.weight(.semibold))
+                        Text(memoryEnabled
+                             ? "对话积累约 20 条消息后自动提炼；之后保留最近 8 条原文作为上下文。完整历史仍可在侧栏查看。"
+                             : "关闭后会停止自动提炼，并继续发送完整对话上下文。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.vertical, 5)
+
                 if memorySummary.isEmpty {
-                    Text("目前还没有整理出的长期记忆。对话积累后，FlyMail 会在后台自动压缩较早内容，提炼稳定偏好、项目和重要决定。")
+                    Text("目前还没有整理出的长期记忆。整理过程在后台完成，不会弹出打断对话的窗口。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 } else {
@@ -480,7 +498,7 @@ struct AISettingsView: View {
             } header: {
                 Text("AI 记忆")
             } footer: {
-                Text("开启后，每累计一段对话会自动把较早内容压缩成简短记忆，作为后续聊天背景。记忆保存在本机；整理时会调用当前首选模型，可能产生少量 API 用量。")
+                Text("开启后，FlyMail 会自动压缩较早对话、提炼稳定偏好和重要信息；摘要保存在本机，并用于后续对话。压缩后请求只携带最近 8 条原始消息，可减少重复上下文和 Token 消耗。整理时调用当前首选模型，可能产生少量 API 用量。")
             }
         }
         .listStyle(.insetGrouped)

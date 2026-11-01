@@ -413,7 +413,7 @@ struct AIChatView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
-                if selectedProfile != nil {
+                if let selectedProfile {
                     Text("·")
                         .foregroundStyle(.tertiary)
                     Text(FlyMailAI.reasoningTitle(reasoningLevel, for: selectedProfile) + "思考")
@@ -631,7 +631,17 @@ struct AIChatView: View {
         sending = true
         saveCurrentConversation()
 
-        let requestMessages = messages
+        // 已有自动摘要时，只发送最近 8 条原始消息；更早的上下文由本机长期记忆摘要承接。
+        // 完整聊天记录仍保留在本地侧栏中，不会被删除。
+        let requestMessages: [AIChatMessage]
+        if AIMemoryStore.isEnabled,
+           AIMemoryStore.compactedConversationID == (currentConversationID ?? ""),
+           AIMemoryStore.compactedCount > 0,
+           messages.count > 8 {
+            requestMessages = Array(messages.suffix(8))
+        } else {
+            requestMessages = messages
+        }
         let requestProfileID = selectedProfileID.isEmpty ? nil : selectedProfileID
         let requestReasoning = reasoningLevel
 
