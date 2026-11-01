@@ -327,8 +327,102 @@ struct SpamSettingsView: View {
 
 /// AI 设置：先留一个入口，暂不提供二级设置。
 struct AISettingsView: View {
+    @AppStorage("ai.provider") private var providerRaw = AIProvider.openAI.rawValue
+    @AppStorage("ai.model") private var model = ""
+    @AppStorage("ai.baseURL") private var customBaseURL = ""
+    @State private var apiKey = KeychainStore.get("ai.apiKey") ?? ""
+    @State private var testing = false
+    @State private var testResult: String?
+    @State private var testError = false
+
+    private var provider: AIProvider {
+        AIProvider(rawValue: providerRaw) ?? .openAI
+    }
+
     var body: some View {
-        ContentUnavailableView("AI 暂未启用", systemImage: "sparkles")
-            .navigationTitle("AI")
+        Form {
+            Section {
+                Picker("AI 服务商", selection: $providerRaw) {
+                    ForEach(AIProvider.allCases) { p in
+                        Text(p.rawValue).tag(p.rawValue)
+                    }
+                }
+                if provider != .custom {
+                    LabeledContent("API 地址", value: provider.baseURL)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    TextField("模型名称（可修改）", text: $model)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } else {
+                    TextField("API Base URL", text: $customBaseURL)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    TextField("模型名称", text: $model)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+            } footer: {
+                Text("选择服务商后自动填写 API 地址和推荐模型。模型名称可按账号实际开通情况修改。")
+            }
+            Section("API Key") {
+                SecureField("粘贴 API Key", text: $apiKey)
+                Button("保存配置") {
+                    KeychainStore.set(apiKey.trimmingCharacters(in: .whitespacesAndNewlines), for: "ai.apiKey")
+                    if provider != .custom {
+                        customBaseURL = provider.baseURL
+                        if model.isEmpty { model = provider.defaultModel }
+                    }
+                    testResult = "配置已保存，密钥安全存储在 iOS 钥匙串。"
+                    testError = false
+                }
+                .disabled(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            } footer: {
+                Text("API Key 保存在本机钥匙串，仅在你主动使用 AI 时发送至所选服务商。")
+            }
+            Section {
+                Button {
+                    testing = true; testResult = nil
+                    Task {
+                        do {
+                            _ = try await FlyMailAI.chat(messages: [AIChatMessage(role: "user", content: "请仅回复：连接成功")])
+                            testResult = "连接成功，模型已正常响应。"; testError = false
+                        } catch {
+                            testResult = error.localizedDescription; testError = true
+                        }
+                        testing = false
+                    }
+                } label: {
+                    HStack {
+                        Text("测试连接")
+                        Spacer()
+                        if testing { ProgressView() }
+                    }
+                }
+                .disabled(testing || apiKey.isEmpty || model.isEmpty || (provider == .custom && customBaseURL.isEmpty))
+                if let testResult {
+                    Text(testResult).font(.footnote).foregroundStyle(testError ? .red : .secondary)
+                }
+            }
+            Section {
+                Button("清除 API Key", role: .destructive) {
+                    apiKey = ""
+                    KeychainStore.delete("ai.apiKey")
+                }
+            }
+        }
+        .navigationTitle("AI")
+        .onChange(of: providerRaw) { _, _ in
+            if provider != .custom {
+                model = provider.defaultModel
+                customBaseURL = provider.baseURL
+            }
+            testResult = nil
+        }
+        .onAppear {
+            if model.isEmpty { model = provider.defaultModel }
+            if provider != .custom { customBaseURL = provider.baseURL }
+        }
     }
 }
