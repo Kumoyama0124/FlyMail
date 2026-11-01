@@ -332,7 +332,12 @@ struct AISettingsView: View {
     @State private var editorRequest: AIModelEditorRequest?
     @State private var pendingDeleteID: String?
     @State private var confirmDelete = false
+    @State private var isEditing = false
+    @State private var memorySummary = AIMemoryStore.summary
 
+    @AppStorage("ai.translationProfileID") private var translationProfileID = ""
+    @AppStorage(AIPersonalization.enterToSendKey) private var enterToSend = false
+    @AppStorage(AIMemoryStore.enabledKey) private var memoryEnabled = true
     @AppStorage(AIPersonalization.nameKey) private var assistantName = "FlyMail 助手"
     @AppStorage(AIPersonalization.languageKey) private var responseLanguage = "auto"
     @AppStorage(AIPersonalization.toneKey) private var responseTone = "natural"
@@ -429,11 +434,62 @@ struct AISettingsView: View {
             } footer: {
                 Text("这些设置保存在本机，并自动附加到每次 AI 请求中，不会覆盖邮件原文。")
             }
+
+            Section {
+                Picker("默认翻译模型", selection: $translationProfileID) {
+                    Text("跟随首选模型").tag("")
+                    ForEach(profiles) { profile in
+                        Text(profile.name).tag(profile.id)
+                    }
+                }
+            } header: {
+                Text("翻译")
+            } footer: {
+                Text("翻译功能会优先使用这里指定的模型；留空时跟随首选模型。摘要、润色和其他邮件 AI 功能默认使用首选模型。")
+            }
+
+            Section {
+                Toggle("回车键发送", isOn: $enterToSend)
+            } header: {
+                Text("聊天体验")
+            } footer: {
+                Text("默认关闭。关闭时回车用于换行；开启后按回车直接发送，仍可使用发送按钮。")
+            }
+
+            Section {
+                Toggle("自动整理长期记忆", isOn: $memoryEnabled)
+                if memorySummary.isEmpty {
+                    Text("目前还没有整理出的长期记忆。对话积累后，FlyMail 会在后台自动压缩较早内容，提炼稳定偏好、项目和重要决定。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("当前记忆")
+                            .font(.subheadline.weight(.semibold))
+                        Text(memorySummary)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                }
+                Button("刷新记忆预览") { memorySummary = AIMemoryStore.summary }
+                Button("清空长期记忆", role: .destructive) {
+                    AIMemoryStore.clear()
+                    memorySummary = ""
+                }
+            } header: {
+                Text("AI 记忆")
+            } footer: {
+                Text("开启后，每累计一段对话会自动把较早内容压缩成简短记忆，作为后续聊天背景。记忆保存在本机；整理时会调用当前首选模型，可能产生少量 API 用量。")
+            }
         }
         .listStyle(.insetGrouped)
+        .environment(\.editMode, .constant(isEditing ? .active : .inactive))
         .navigationTitle("AI")
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) { EditButton() }
+            ToolbarItem(placement: .topBarLeading) {
+                Button(isEditing ? "完成" : "排序") { isEditing.toggle() }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     editorRequest = AIModelEditorRequest(profile: AIModelProfile.makeDefault(), isNew: true)
@@ -443,9 +499,15 @@ struct AISettingsView: View {
                 .accessibilityLabel("添加模型")
             }
         }
-        .onAppear { reload() }
+        .onAppear {
+            reload()
+            memorySummary = AIMemoryStore.summary
+        }
         .onChange(of: primaryID) { _, newValue in
             AIModelStore.setPrimaryProfileID(newValue)
+        }
+        .onChange(of: translationProfileID) { _, newValue in
+            AIModelStore.setTranslationProfileID(newValue)
         }
         .sheet(item: $editorRequest) { request in
             NavigationStack {
@@ -608,6 +670,27 @@ private struct AIModelEditorView: View {
                 TextField("模型名称", text: $draft.model)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                if FlyMailAI.canControlReasoning(draft) {
+                    Picker("默认思考等级", selection: $draft.reasoningDefaultRaw) {
+                        ForEach(AIReasoningLevel.allCases) { level in
+                            Text(level.title).tag(level.rawValue)
+                        }
+                    }
+                } else {
+                    Label("该模型不支持通过此 API 单独调整思考等级", systemImage: "info.circle")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                if draft.provider == .zhipu && draft.model.lowercased().contains("glm-5.3") {
+                    Text("GLM-5.3 强制启用思考；选择“关闭”时会自动使用最低思考强度。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if draft.provider == .gemini && draft.model.lowercased().contains("2.5") && draft.model.lowercased().contains("pro") {
+                    Text("Gemini 2.5 Pro 不支持完全关闭思考；关闭选项会使用最低可用预算。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             } header: {
                 Text("基本信息")
             } footer: {
