@@ -769,8 +769,8 @@ struct AISettingsView: View {
             age: personaAge,
             height: personaHeight,
             weight: personaWeight,
-            zodiac: personaZodiac,
-            mbti: personaMBTI
+            mbti: personaMBTI,
+            zodiac: personaZodiac
         )
     }
 
