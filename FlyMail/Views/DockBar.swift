@@ -65,12 +65,17 @@ struct DockBar: View {
         let h = itemHeight + (pressed ? growH : 0)
         // 滑块中心 = 第 progress 栏的中心；放大时向两侧均匀长出，中心不动
         let x = inset + CGFloat(progress) * tabWidth - (w - tabWidth) / 2
-        // 滑块 tint 必须跟随外观：固定白 0.58 在浅色模式糊成一块、在深色模式直接变成白色实心板。
-        // 参考系统标签栏：滑块只比底条亮一点点，主要靠 interactive() 的按压高亮。
-        let tint = colorScheme == .dark ? Color.white.opacity(0.10) : Color.white.opacity(0.30)
+        // 选中高亮不再叠第二层玻璃：玻璃叠玻璃会互相折射，把整条 dock 洗成灰白。
+        // 改用跟随外观的半透明填充，观感对齐系统标签栏的选中底色。
         return Color.clear
             .frame(width: w, height: h)
-            .glassEffect(.regular.tint(tint).interactive(), in: Capsule())
+            .background {
+                Capsule()
+                    .fill(colorScheme == .dark ? Color.white.opacity(0.14) : Color.white.opacity(0.60))
+            }
+            .overlay {
+                Capsule().strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+            }
             .offset(x: x)
             .allowsHitTesting(false)
     }

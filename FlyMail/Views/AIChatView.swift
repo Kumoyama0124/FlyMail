@@ -137,13 +137,6 @@ struct AIChatView: View {
             .accessibilityLabel("对话历史")
             .accessibilityIdentifier("ai.history")
 
-            // 顶部不再放一个大大的“AI”：显示用户自定义的助手名称，
-            // 字号与旁边 42pt 的按钮对齐，不再突兀。
-            Text(assistantName.isEmpty ? "AI 助手" : assistantName)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-
             Spacer(minLength: 8)
 
             Button {
@@ -175,13 +168,21 @@ struct AIChatView: View {
         .padding(.bottom, 8)
     }
 
+    /// 空状态标题：顶部不再显示助手名，把它放到这里的“AI”两个字的位置。
+    /// 用户没改过名字时保持“开始与 AI 对话”。
+    private var emptyStateTitle: String {
+        if !FlyMailAI.hasReadyModel { return "AI 尚未配置" }
+        let name = assistantName.trimmingCharacters(in: .whitespaces)
+        return (name.isEmpty || name == "FlyMail 助手") ? "开始与 AI 对话" : "开始与\(name)对话"
+    }
+
     private var mainContent: some View {
         VStack(spacing: 0) {
             if messages.isEmpty {
                 VStack(spacing: 10) {
                     Spacer(minLength: 0)
                     ContentUnavailableView(
-                        FlyMailAI.hasReadyModel ? "开始与 AI 对话" : "AI 尚未配置",
+                        emptyStateTitle,
                         systemImage: "sparkles",
                         description: Text(
                             FlyMailAI.hasReadyModel
@@ -364,8 +365,8 @@ struct AIChatView: View {
         }
         .padding(12)
         .background {
-            // 只用一层玻璃：叠一层 regularMaterial 会变成双重磨砂，
-            // 浅色发糊、深色发白发灰。玻璃外只加一圈 0.7pt 发丝描边。
+            // 只用一层玻璃：叠一层 regularMaterial 会变成双重磨砂。
+            // 也不能在玻璃正下方加投影——玻璃会采样背后的内容，把阴影一起折射进来，整块发灰。
             RoundedRectangle(cornerRadius: 25, style: .continuous)
                 .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 25, style: .continuous))
                 .overlay {
@@ -373,7 +374,6 @@ struct AIChatView: View {
                         .strokeBorder(Color.primary.opacity(0.09), lineWidth: 0.7)
                 }
         }
-        .shadow(color: .black.opacity(0.07), radius: 12, y: 4)
     }
 
     /// “更多”菜单内容：切换模型 + 调思考等级（原先铺在输入框下方一整行，现在收进圆形按钮）。
