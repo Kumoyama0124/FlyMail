@@ -175,33 +175,35 @@ struct AvatarCropView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 16) {
-                GeometryReader { geo in
-                    let size = min(geo.size.width, geo.size.height) - 32
-                    ZStack {
-                        Color.black.ignoresSafeArea()
-                        Image(uiImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: size, height: size)
-                            .clipped()
-                            .scaleEffect(scale)
-                            .offset(offset)
-                            .gesture(
-                                DragGesture()
-                                    .onChanged { v in
-                                        let s = scale
-                                        // 图片填满正方形后的显示尺寸，缩放后超出正方形的那部分才能拖
-                                        let baseW = baseSize(for: size).width * s
-                                        let baseH = baseSize(for: size).height * s
-                                        let maxX = max(0, (baseW - size) / 2)
-                                        let maxY = max(0, (baseH - size) / 2)
-                                        offset = CGSize(
-                                            width: min(maxX, max(-maxX, lastOffset.width + v.translation.width)),
-                                            height: min(maxY, max(-maxY, lastOffset.height + v.translation.height))
-                                        )
-                                    }
-                                    .onEnded { _ in lastOffset = offset }
+            GeometryReader { geo in
+                let size = min(geo.size.width, geo.size.height) * 0.86
+                let x0 = (geo.size.width - size) / 2
+                let y0 = (geo.size.height - size) / 2 - 16
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    // 图片不裁切：超出方框的部分用暗罩盖住，暗示"还能拖出来"
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: size, height: size)
+                        .clipped()
+                        .scaleEffect(scale)
+                        .offset(offset)
+                        .gesture(
+                            DragGesture()
+                                .onChanged { v in
+                                    let s = scale
+                                    // 图片填满正方形后的显示尺寸，缩放后超出正方形的那部分才能拖
+                                    let baseW = baseSize(for: size).width * s
+                                    let baseH = baseSize(for: size).height * s
+                                    let maxX = max(0, (baseW - size) / 2)
+                                    let maxY = max(0, (baseH - size) / 2)
+                                    offset = CGSize(
+                                        width: min(maxX, max(-maxX, lastOffset.width + v.translation.width)),
+                                        height: min(maxY, max(-maxY, lastOffset.height + v.translation.height))
+                                    )
+                                }
+                                .onEnded { _ in lastOffset = offset }
                             )
                             .simultaneousGesture(
                                 MagnificationGesture()
@@ -220,32 +222,76 @@ struct AvatarCropView: View {
                                         lastOffset = offset
                                     }
                             )
-                        // 1:1 框：白边 + 九宫格线，看得清裁到哪里
-                        Rectangle().stroke(.white, lineWidth: 1.5)
-                            .frame(width: size, height: size)
-                        VStack(spacing: 0) {
-                            ForEach(0..<2) { _ in
-                                Rectangle().fill(.white.opacity(0.5)).frame(height: 0.5)
-                                Spacer()
-                            }
-                            Rectangle().fill(.clear).frame(height: 0)
-                        }.frame(width: size, height: size)
-                        HStack(spacing: 0) {
-                            ForEach(0..<2) { _ in
-                                Rectangle().fill(.white.opacity(0.5)).frame(width: 0.5)
-                                Spacer()
-                            }
-                            Rectangle().fill(.clear).frame(width: 0)
-                        }.frame(width: size, height: size)
+                    // 四周暗罩：中间亮、四周暗，一眼看清裁切范围
+                    Rectangle().fill(.black.opacity(0.55))
+                        .frame(width: geo.size.width, height: max(0, y0))
+                        .position(x: geo.size.width / 2, y: y0 / 2)
+                    Rectangle().fill(.black.opacity(0.55))
+                        .frame(width: geo.size.width, height: max(0, geo.size.height - (y0 + size)))
+                        .position(x: geo.size.width / 2, y: y0 + size + (geo.size.height - (y0 + size)) / 2)
+                    Rectangle().fill(.black.opacity(0.55))
+                        .frame(width: max(0, x0), height: size)
+                        .position(x: x0 / 2, y: y0 + size / 2)
+                    Rectangle().fill(.black.opacity(0.55))
+                        .frame(width: max(0, geo.size.width - (x0 + size)), height: size)
+                        .position(x: x0 + size + (geo.size.width - (x0 + size)) / 2, y: y0 + size / 2)
+                    // 1:1 白框 + 三分线 + 四角亮标
+                    Rectangle().stroke(.white.opacity(0.95), lineWidth: 1.5)
+                        .frame(width: size, height: size)
+                        .position(x: geo.size.width / 2, y: y0 + size / 2)
+                    VStack(spacing: 0) {
+                        ForEach(1..<3) { i in
+                            Rectangle().fill(.white.opacity(0.35)).frame(height: 0.5)
+                                .position(x: geo.size.width / 2, y: y0 + size * CGFloat(i) / 3)
+                            if i == 1 { Spacer(minLength: 0) }
+                        }
                     }
-                    .frame(width: geo.size.width, height: geo.size.height)
-                    .onAppear { displaySquare = size }
-                    .onChange(of: geo.size) { _, _ in displaySquare = size }
+                    .frame(width: geo.size.width, height: size)
+                    .position(x: geo.size.width / 2, y: y0 + size / 2)
+                    HStack(spacing: 0) {
+                        ForEach(1..<3) { i in
+                            Rectangle().fill(.white.opacity(0.35)).frame(width: 0.5)
+                                .position(x: x0 + size * CGFloat(i) / 3, y: y0 + size / 2)
+                            if i == 1 { Spacer(minLength: 0) }
+                        }
+                    }
+                    .frame(width: size, height: size)
+                    .position(x: geo.size.width / 2, y: y0 + size / 2)
+                    CropCornerTicks()
+                        .stroke(.white, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                        .frame(width: size, height: size)
+                        .position(x: geo.size.width / 2, y: y0 + size / 2)
                 }
-                Text("拖动调整位置，双指缩放调整大小，框里的就是头像")
-                    .font(.callout).foregroundStyle(.secondary)
+                .frame(width: geo.size.width, height: geo.size.height)
+                .onAppear { displaySquare = size }
+                .onChange(of: geo.size) { _, _ in displaySquare = size }
             }
-            .background(.black)
+            .overlay(alignment: .bottom) {
+                VStack(spacing: 12) {
+                    // 动过才出现：一键回到初始位置
+                    if scale > 1.01 || offset.width != 0 || offset.height != 0 {
+                        Button {
+                            withAnimation(.snappy) {
+                                scale = 1; lastScale = 1
+                                offset = .zero; lastOffset = .zero
+                            }
+                        } label: {
+                            Label("重置", systemImage: "arrow.counterclockwise")
+                                .font(.callout.weight(.medium))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 18)
+                                .padding(.vertical, 9)
+                                .background(.white.opacity(0.16), in: Capsule())
+                        }
+                    }
+                    Text("拖动调整位置 · 双指缩放 · 框内为最终头像")
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.65))
+                }
+                .padding(.bottom, 20)
+                .animation(.snappy(duration: 0.2), value: scale)
+            }
+            .preferredColorScheme(.dark)
             .navigationTitle("裁切头像")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -288,5 +334,18 @@ struct AvatarCropView: View {
             image.draw(in: CGRect(x: -origin.x * drawScale, y: -origin.y * drawScale,
                                   width: image.size.width * drawScale, height: image.size.height * drawScale))
         }
+    }
+}
+
+/// 裁切框四角的亮色 L 形标记（系统照片裁切器同款）
+struct CropCornerTicks: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let l: CGFloat = 18
+        p.move(to: CGPoint(x: 0, y: l)); p.addLine(to: CGPoint(x: 0, y: 0)); p.addLine(to: CGPoint(x: l, y: 0))
+        p.move(to: CGPoint(x: rect.width - l, y: 0)); p.addLine(to: CGPoint(x: rect.width, y: 0)); p.addLine(to: CGPoint(x: rect.width, y: l))
+        p.move(to: CGPoint(x: rect.width, y: rect.height - l)); p.addLine(to: CGPoint(x: rect.width, y: rect.height)); p.addLine(to: CGPoint(x: rect.width - l, y: rect.height))
+        p.move(to: CGPoint(x: l, y: rect.height)); p.addLine(to: CGPoint(x: 0, y: rect.height)); p.addLine(to: CGPoint(x: 0, y: rect.height - l))
+        return p
     }
 }

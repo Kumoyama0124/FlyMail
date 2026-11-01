@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 struct AIChatAttachment: Identifiable, Codable, Hashable {
     var id: String = UUID().uuidString
@@ -425,10 +426,90 @@ enum AIPersonalization {
         if !customInstruction.isEmpty {
             parts.append("用户补充的个性化要求：\n\(customInstruction)")
         }
+        // 助手资料卡（选填）：填了才注入，让 AI 按资料卡里的人设回答
+        if let card = AIPersonaCardStore.profilePromptLine {
+            parts.append(card)
+        }
         if AIMemoryStore.isEnabled, !memory.isEmpty {
             parts.append("当前对话中提炼的长期记忆（只作为上下文参考；如与用户本轮新信息冲突，以本轮为准）：\n\(memory)")
         }
         return parts.joined(separator: "\n\n")
+    }
+}
+
+/// AI 助手资料卡：头像文件 + 性别/年龄/身高/体重/星座等基本设定。
+/// 头像用于 AI 聊天界面每条回复旁的显示；资料注入系统提示词作为人设。
+enum AIPersonaCardStore {
+    static let genderKey = "ai.persona.gender"
+    static let ageKey = "ai.persona.age"
+    static let heightKey = "ai.persona.height"
+    static let weightKey = "ai.persona.weight"
+    static let zodiacKey = "ai.persona.zodiac"
+    static let showAvatarKey = "ai.chat.showAvatar"
+    static let showNameKey = "ai.chat.showName"
+
+    static let zodiacOptions = [
+        "未设置", "白羊座", "金牛座", "双子座", "巨蟹座", "狮子座", "处女座",
+        "天秤座", "天蝎座", "射手座", "摩羯座", "水瓶座", "双鱼座",
+    ]
+
+    static var avatarURL: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("AIPersonaAvatar.png")
+    }
+
+    static func loadAvatar() -> UIImage? {
+        UIImage(contentsOfFile: avatarURL.path)
+    }
+
+    static func saveAvatar(_ image: UIImage) {
+        try? FileManager.default.createDirectory(at: avatarURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if let data = image.pngData() { try? data.write(to: avatarURL) }
+    }
+
+    static func removeAvatar() {
+        try? FileManager.default.removeItem(at: avatarURL)
+    }
+
+    static var gender: String { UserDefaults.standard.string(forKey: genderKey) ?? "" }
+    static var age: Int { UserDefaults.standard.integer(forKey: ageKey) }
+    static var height: Int { UserDefaults.standard.integer(forKey: heightKey) }
+    static var weight: Int { UserDefaults.standard.integer(forKey: weightKey) }
+    static var zodiac: String { UserDefaults.standard.string(forKey: zodiacKey) ?? "未设置" }
+
+    static var genderTitle: String {
+        switch gender {
+        case "male": "男"
+        case "female": "女"
+        case "other": "其他"
+        default: ""
+        }
+    }
+
+    /// 保存资料（高度/体重/年龄为 0 表示未填写）
+    static func saveProfile(gender: String, age: Int, height: Int, weight: Int, zodiac: String) {
+        UserDefaults.standard.set(gender, forKey: genderKey)
+        UserDefaults.standard.set(age, forKey: ageKey)
+        UserDefaults.standard.set(height, forKey: heightKey)
+        UserDefaults.standard.set(weight, forKey: weightKey)
+        UserDefaults.standard.set(zodiac, forKey: zodiacKey)
+    }
+
+    static var hasAnyProfileInfo: Bool {
+        !genderTitle.isEmpty || age > 0 || height > 0 || weight > 0 || (zodiac != "未设置" && !zodiac.isEmpty)
+    }
+
+    /// 注入系统提示词的一行人设；资料卡没填时返回 nil
+    static var profilePromptLine: String? {
+        guard hasAnyProfileInfo else { return nil }
+        var items: [String] = []
+        if !genderTitle.isEmpty { items.append("性别 \(genderTitle)") }
+        if age > 0 { items.append("\(age) 岁") }
+        if height > 0 { items.append("身高 \(height) cm") }
+        if weight > 0 { items.append("体重 \(weight) kg") }
+        if zodiac != "未设置", !zodiac.isEmpty { items.append("星座 \(zodiac)") }
+        guard !items.isEmpty else { return nil }
+        return "你的资料卡设定：" + items.joined(separator: "；") + "。聊天时保持这个人设。"
     }
 }
 

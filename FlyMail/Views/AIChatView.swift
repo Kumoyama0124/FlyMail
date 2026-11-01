@@ -32,6 +32,12 @@ struct AIChatView: View {
 
     @AppStorage(AIPersonalization.enterToSendKey) private var enterToSend = false
     @AppStorage(AIPersonalization.nameKey) private var assistantName = "FlyMail 助手"
+    @AppStorage(Prefs.myNickname) private var myNickname = ""
+    @AppStorage(AIPersonaCardStore.showAvatarKey) private var showAvatar = true
+    @AppStorage(AIPersonaCardStore.showNameKey) private var showName = true
+    /// 聊天头像：我 = 我的头像，AI = 助手资料卡头像
+    @State private var myChatAvatar: UIImage?
+    @State private var aiChatAvatar: UIImage?
 
     private var profiles: [AIModelProfile] { AIModelStore.loadProfiles() }
     private var selectedProfile: AIModelProfile? {
@@ -250,43 +256,94 @@ struct AIChatView: View {
     }
 
     private func messageRow(_ message: AIChatMessage) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            if message.role == "user" { Spacer(minLength: 46) }
+        let isUser = message.role == "user"
+        return HStack(alignment: .top, spacing: 8) {
+            if isUser { Spacer(minLength: 24) }
 
-            VStack(alignment: .leading, spacing: 8) {
-                if !message.attachments.isEmpty {
-                    HStack(spacing: 6) {
-                        ForEach(message.attachments) { attachment in
-                            Label(attachment.fileName, systemImage: attachment.isImage ? "photo" : "doc")
-                                .font(.caption)
-                                .lineLimit(1)
-                                .padding(.horizontal, 9)
-                                .padding(.vertical, 6)
-                                .background(Color.secondary.opacity(0.12), in: Capsule())
-                        }
+            // 微信式：头像贴着气泡，名称在头像这一侧的气泡上方（每条消息都有）
+            if showAvatar, !isUser { chatAvatar(isUser: false) }
+
+            VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
+                if showName {
+                    Text(isUser
+                         ? (myNickname.isEmpty ? "我" : myNickname)
+                         : (assistantName.isEmpty ? "AI 助手" : assistantName))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                }
+                bubble(for: message)
+            }
+
+            if showAvatar, isUser { chatAvatar(isUser: true) }
+
+            if !isUser { Spacer(minLength: 24) }
+        }
+    }
+
+    private func bubble(for message: AIChatMessage) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !message.attachments.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(message.attachments) { attachment in
+                        Label(attachment.fileName, systemImage: attachment.isImage ? "photo" : "doc")
+                            .font(.caption)
+                            .lineLimit(1)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 6)
+                            .background(Color.secondary.opacity(0.12), in: Capsule())
                     }
                 }
+            }
 
-                if !message.content.isEmpty {
-                    Text(message.content)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
+            if !message.content.isEmpty {
+                Text(message.content)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(13)
+        .background(
+            message.role == "user"
+            ? Color.accentColor.opacity(0.13)
+            // 页面底色是 systemGroupedBackground（浅灰），助手气泡再用 secondarySystemBackground
+            // 会和背景同色“隐形”；浅色下用白卡、深色下用抬高一档的深灰。
+            : (colorScheme == .dark
+               ? Color(uiColor: .secondarySystemBackground)
+               : Color(uiColor: .systemBackground)),
+            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+        )
+    }
+
+    /// 聊天气泡旁的头像：我 = “我的”页头像，AI = 助手资料卡头像；没设置时用首字母/星标兜底
+    private func chatAvatar(isUser: Bool) -> some View {
+        Group {
+            if isUser {
+                if let myChatAvatar {
+                    Image(uiImage: myChatAvatar).resizable().scaledToFill()
+                } else {
+                    ZStack {
+                        Circle().fill(Color.accentColor.opacity(0.15))
+                        Text(String((myNickname.isEmpty ? "我" : myNickname).prefix(1)))
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } else {
+                if let aiChatAvatar {
+                    Image(uiImage: aiChatAvatar).resizable().scaledToFill()
+                } else {
+                    ZStack {
+                        Circle().fill(Color.blue)
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
                 }
             }
-            .padding(13)
-            .background(
-                message.role == "user"
-                ? Color.accentColor.opacity(0.13)
-                // 页面底色是 systemGroupedBackground（浅灰），助手气泡再用 secondarySystemBackground
-                // 会和背景同色“隐形”；浅色下用白卡、深色下用抬高一档的深灰。
-                : (colorScheme == .dark
-                   ? Color(uiColor: .secondarySystemBackground)
-                   : Color(uiColor: .systemBackground)),
-                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-            )
-
-            if message.role != "user" { Spacer(minLength: 34) }
         }
+        .frame(width: 34, height: 34)
+        .clipShape(Circle())
     }
 
     private var composer: some View {
@@ -675,6 +732,11 @@ struct AIChatView: View {
 
     private func restoreConversations() {
         conversations = AIConversationStore.load()
+        // 聊天头像：我的头像 + 助手资料卡头像（每次进页面重新读，改头像立即生效）
+        let myURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("MyAvatar.png")
+        myChatAvatar = UIImage(contentsOfFile: myURL.path)
+        aiChatAvatar = AIPersonaCardStore.loadAvatar()
         selectedProfileID = ""
         if let current = conversations.first {
             currentConversationID = current.id

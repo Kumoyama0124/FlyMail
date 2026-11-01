@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UserNotifications
+import PhotosUI
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -345,6 +346,34 @@ struct AISettingsView: View {
     @AppStorage(AIPersonalization.languageKey) private var responseLanguage = "auto"
     @AppStorage(AIPersonalization.toneKey) private var responseTone = "natural"
     @AppStorage(AIPersonalization.instructionKey) private var customInstruction = ""
+    // 助手资料卡
+    @State private var personaAvatar: UIImage?
+    @State private var personaGender = AIPersonaCardStore.gender
+    @State private var personaAge = AIPersonaCardStore.age
+    @State private var personaHeight = AIPersonaCardStore.height
+    @State private var personaWeight = AIPersonaCardStore.weight
+    @State private var personaZodiac = AIPersonaCardStore.zodiac
+    @State private var personaPickerOpen = false
+    @State private var personaPickerItem: PhotosPickerItem?
+    @State private var personaCropImage: UIImage?
+    // 聊天体验
+    @AppStorage(AIPersonaCardStore.showAvatarKey) private var showAvatar = true
+    @AppStorage(AIPersonaCardStore.showNameKey) private var showName = true
+
+    private var personaAvatarView: some View {
+        Group {
+            if let personaAvatar {
+                Image(uiImage: personaAvatar).resizable().scaledToFill()
+            } else {
+                ZStack {
+                    Circle().fill(Color.accentColor.opacity(0.12))
+                    Image(systemName: "sparkles").foregroundStyle(Color.accentColor)
+                }
+            }
+        }
+        .frame(width: 56, height: 56)
+        .clipShape(Circle())
+    }
 
     var body: some View {
         List {
@@ -439,6 +468,65 @@ struct AISettingsView: View {
             }
 
             Section {
+                Button { personaPickerOpen = true } label: {
+                    HStack(spacing: 12) {
+                        personaAvatarView
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("助手头像")
+                            Text("选一张图，正方形裁切后使用")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                Picker("性别", selection: $personaGender) {
+                    Text("保密").tag("")
+                    Text("男").tag("male")
+                    Text("女").tag("female")
+                    Text("其他").tag("other")
+                }
+                Stepper("年龄：\(personaAge == 0 ? "未设置" : "\(personaAge) 岁")", value: $personaAge, in: 0...120)
+                HStack {
+                    Text("身高")
+                    Spacer()
+                    TextField("未设置", value: $personaHeight, format: .number)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 70)
+                    Text("cm").foregroundStyle(.secondary)
+                }
+                HStack {
+                    Text("体重")
+                    Spacer()
+                    TextField("未设置", value: $personaWeight, format: .number)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 70)
+                    Text("kg").foregroundStyle(.secondary)
+                }
+                Picker("星座", selection: $personaZodiac) {
+                    ForEach(AIPersonaCardStore.zodiacOptions, id: \.self) { Text($0).tag($0) }
+                }
+
+                if personaAvatar != nil {
+                    Button(role: .destructive) {
+                        AIPersonaCardStore.removeAvatar()
+                        personaAvatar = nil
+                    } label: {
+                        Label("恢复默认头像", systemImage: "arrow.uturn.backward")
+                    }
+                }
+            } header: {
+                Text("助手资料卡")
+            } footer: {
+                Text("头像显示在 AI 聊天每条回复旁；资料会让 AI 按这个人设回答，全部选填。")
+            }
+
+            Section {
                 Picker("默认翻译模型", selection: $translationProfileID) {
                     Text("跟随首选模型").tag("")
                     ForEach(profiles) { profile in
@@ -453,10 +541,12 @@ struct AISettingsView: View {
 
             Section {
                 Toggle("回车键发送", isOn: $enterToSend)
+                Toggle("显示头像", isOn: $showAvatar)
+                Toggle("显示名称", isOn: $showName)
             } header: {
                 Text("聊天体验")
             } footer: {
-                Text("默认关闭。关闭时回车用于换行；开启后按回车直接发送，仍可使用发送按钮。")
+                Text("回车键发送默认关闭：关闭时回车用于换行，开启后按回车直接发送。显示头像/名称开启后，AI 聊天里每条消息旁都会显示对应一侧的头像和名称（像微信那样的对话样式）。")
             }
 
             Section {
@@ -531,7 +621,31 @@ struct AISettingsView: View {
         }
         .onAppear {
             reload()
+            personaAvatar = AIPersonaCardStore.loadAvatar()
         }
+        .photosPicker(isPresented: $personaPickerOpen, selection: $personaPickerItem, matching: .images)
+        .onChange(of: personaPickerItem) { _, item in
+            Task {
+                guard let data = try? await item?.loadTransferable(type: Data.self),
+                      let img = UIImage(data: data) else { return }
+                personaPickerItem = nil
+                personaCropImage = img
+            }
+        }
+        .sheet(isPresented: Binding(get: { personaCropImage != nil }, set: { if !$0 { personaCropImage = nil } })) {
+            if let crop = personaCropImage {
+                AvatarCropView(image: crop, onCancel: { personaCropImage = nil }) { cropped in
+                    AIPersonaCardStore.saveAvatar(cropped)
+                    personaAvatar = cropped
+                    personaCropImage = nil
+                }
+            }
+        }
+        .onChange(of: personaGender) { _, _ in persistPersonaCard() }
+        .onChange(of: personaAge) { _, _ in persistPersonaCard() }
+        .onChange(of: personaHeight) { _, _ in persistPersonaCard() }
+        .onChange(of: personaWeight) { _, _ in persistPersonaCard() }
+        .onChange(of: personaZodiac) { _, _ in persistPersonaCard() }
         .onChange(of: primaryID) { _, newValue in
             AIModelStore.setPrimaryProfileID(newValue)
         }
