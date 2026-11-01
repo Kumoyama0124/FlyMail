@@ -452,7 +452,9 @@ enum FlyMailAI {
         删除寒暄、临时问题、重复内容和过时信息；不要写入密码、API Key、令牌、验证码或其他秘密。
         使用简体中文，按主题分组，控制在 1200 个汉字以内。只输出整理后的记忆正文。
         """
-        let source = messages.map { "\($0.role == "user" ? "用户" : "助手")：\($0.content)" }
+        let existingMemory = AIMemoryStore.summary
+        let existingContext = existingMemory.isEmpty ? "" : "已有长期记忆：\n\(existingMemory)\n\n"
+        let source = existingContext + messages.map { "\($0.role == "user" ? "用户" : "助手")：\($0.content)" }
             .joined(separator: "\n\n")
         return try await chat(
             profile: profile,
