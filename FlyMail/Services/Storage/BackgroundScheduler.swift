@@ -5,8 +5,8 @@ import UserNotifications
 
 final class BackgroundScheduler {
     static let shared = BackgroundScheduler()
-    static let refreshID = "com.gymbull.AIMail.refresh"
-    static let outboxID = "com.gymbull.AIMail.outbox"
+    static let refreshID = "com.gymbull.flymail.refresh"
+    static let outboxID = "com.gymbull.flymail.outbox"
     private var container: ModelContainer?
 
     func register(container: ModelContainer) {

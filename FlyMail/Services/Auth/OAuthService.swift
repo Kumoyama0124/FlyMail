@@ -32,7 +32,7 @@ final class OAuthService: NSObject, ASWebAuthenticationPresentationContextProvid
                             redirect: "\(scheme):/oauth2redirect", callbackScheme: scheme)
         default:
             let cid = info["FMMicrosoftClientID"] as? String ?? ""
-            let scheme = "msauth.com.gymbull.AIMail"
+            let scheme = "msauth.com.gymbull.flymail"
             return Provider(authURL: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
                             tokenURL: "https://login.microsoftonline.com/common/oauth2/v2.0/token", clientID: cid,
                             scope: "offline_access openid email https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/SMTP.Send",

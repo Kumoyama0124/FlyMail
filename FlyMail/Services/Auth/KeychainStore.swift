@@ -7,7 +7,7 @@ import Security
 /// 带 ThisDeviceOnly 的旧密钥会被排除在备份之外，换机就丢了。
 /// 后台任务仍可在首次解锁后读取。
 enum KeychainStore {
-    private static let service = "com.gymbull.AIMail.credentials"
+    private static let service = "com.gymbull.flymail.credentials"
 
     static func set(_ value: String, for key: String) {
         let base: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
