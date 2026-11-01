@@ -6,6 +6,10 @@ import SwiftData
 /// 只在用户明确打开开关后工作，且带完整的防循环与频率限制。
 enum AutoReplyStore {
     static let enabledKey = "ai.autoreply.enabled"
+    static let modelProfileIDKey = "ai.autoreply.modelProfileID"
+    static let markAIKey = "ai.autoreply.markAI"
+    static let followLanguageKey = "ai.autoreply.followLanguage"
+    static let replyLanguageKey = "ai.autoreply.replyLanguage"
     static let nameKey = "ai.autoreply.persona.name"
     static let toneKey = "ai.autoreply.persona.tone"
     static let instructionKey = "ai.autoreply.persona.instruction"
@@ -14,6 +18,26 @@ enum AutoReplyStore {
 
     static var isEnabled: Bool {
         UserDefaults.standard.bool(forKey: enabledKey)
+    }
+    /// 回复用的模型配置 ID；空 = 跟随 AI 设置里的首选模型
+    static var modelProfileID: String {
+        UserDefaults.standard.string(forKey: modelProfileIDKey) ?? ""
+    }
+    /// 回复开头是否标明 AI 身份（默认开）
+    static var marksAIIdentity: Bool {
+        UserDefaults.standard.object(forKey: markAIKey) == nil
+            ? true
+            : UserDefaults.standard.bool(forKey: markAIKey)
+    }
+    /// 语言是否跟随对方邮件（默认开）；关闭时用固定回复语言
+    static var followsLanguage: Bool {
+        UserDefaults.standard.object(forKey: followLanguageKey) == nil
+            ? true
+            : UserDefaults.standard.bool(forKey: followLanguageKey)
+    }
+    /// 固定回复语言："zh" / "en"（仅在不跟随对方语言时生效）
+    static var replyLanguage: String {
+        UserDefaults.standard.string(forKey: replyLanguageKey) ?? "zh"
     }
     static var personaName: String {
         UserDefaults.standard.string(forKey: nameKey) ?? ""
@@ -26,6 +50,10 @@ enum AutoReplyStore {
     }
 
     static func saveEnabled(_ on: Bool) { UserDefaults.standard.set(on, forKey: enabledKey) }
+    static func saveModel(_ profileID: String) { UserDefaults.standard.set(profileID, forKey: modelProfileIDKey) }
+    static func saveMarkAI(_ on: Bool) { UserDefaults.standard.set(on, forKey: markAIKey) }
+    static func saveFollowLanguage(_ on: Bool) { UserDefaults.standard.set(on, forKey: followLanguageKey) }
+    static func saveReplyLanguage(_ lang: String) { UserDefaults.standard.set(lang, forKey: replyLanguageKey) }
     static func savePersona(name: String, tone: String, instruction: String) {
         UserDefaults.standard.set(name, forKey: nameKey)
         UserDefaults.standard.set(tone, forKey: toneKey)
@@ -86,15 +114,22 @@ enum AutoReplyStore {
     /// 独立人设的系统提示词：与系统助手完全分开
     static func personaSystemPrompt() -> String {
         let name = personaName.isEmpty ? "小 Fly" : personaName
-        var parts = [
-            "你是「\(name)」，用户邮箱里的 AI 伙伴，替用户自动回复新收到的邮件。",
-            "写作要求：回复开头用一句自然的话说明这是一条自动回复（比如“我是 \(name)，这个邮箱的 AI 伙伴”），不冒充用户本人；正文简短（一般不超过 120 字）、口语化、符合你的性格（\(toneTitle)）；对方写英文时可以用英文回复。",
-            "安全底线：不替用户承诺付款、转账、签署合同或透露验证码、密码等敏感信息；遇到这类内容，热情但明确地请对方等用户本人回复。不编造用户的行程等个人信息。不写长篇大论。",
-        ]
+        var parts = ["你是「\(name)」，用户邮箱里的 AI 伙伴，替用户自动回复新收到的邮件。"]
+        if marksAIIdentity {
+            parts.append("回复开头用一句自然的话说明这是一条自动回复（比如“我是 \(name)，这个邮箱的 AI 伙伴”），不冒充用户本人。")
+        }
+        parts.append("正文简短（一般不超过 120 字）、口语化、符合你的性格（\(toneTitle)）。")
+        parts.append(languageRule)
+        parts.append("安全底线：不替用户承诺付款、转账、签署合同或透露验证码、密码等敏感信息；遇到这类内容，热情但明确地请对方等用户本人回复。不编造用户的行程等个人信息。不写长篇大论。")
         if !personaInstruction.isEmpty {
             parts.append("用户为这个人设补充的专属要求：\n\(personaInstruction)")
         }
         return parts.joined(separator: "\n\n")
+    }
+
+    private static var languageRule: String {
+        if followsLanguage { return "语言：用与对方邮件相同的语言回复。" }
+        return replyLanguage == "en" ? "语言：始终用英文回复。" : "语言：始终用简体中文回复。"
     }
 }
 
@@ -172,7 +207,12 @@ struct AutoReplyService {
 
     private func reply(to message: MailMessage, context: ModelContext) async throws {
         guard let folder = message.folder, let account = folder.account else { return }
-        guard let profile = FlyMailAI.primaryProfile() else { return }
+        // 回复模型：优先用自动回复里指定的；没指定就用 AI 设置的首选模型
+        let profiles = AIModelStore.loadProfiles()
+        let profile = profiles.first { $0.id == AutoReplyStore.modelProfileID }
+            ?? profiles.first { $0.id == AIModelStore.primaryProfileID }
+            ?? profiles.first
+        guard let profile else { return }
         let key = KeychainStore.get(AIModelStore.keychainKey(for: profile.id)) ?? ""
         guard !key.isEmpty else { return }
 
