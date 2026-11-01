@@ -1,0 +1,46 @@
+name: Build unsigned FlyMail IPA
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/ai-openai-compatible]
+    paths:
+      - "FlyMail/**"
+      - "project.yml"
+      - ".github/workflows/build-ipa.yml"
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: xcode-27
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        run: xcodegen generate
+      - name: Archive without code signing
+        run: |
+          xcodebuild archive \
+            -project FlyMail.xcodeproj \
+            -scheme FlyMail \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/FlyMail.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/FlyMail.xcarchive/Products/Applications/FlyMail.app"
+          test -d "$APP"
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/Payload/FlyMail.app"
+          cd "$RUNNER_TEMP"
+          /usr/bin/zip -qry FlyMail-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FlyMail-unsigned-IPA
+          path: ${{ runner.temp }}/FlyMail-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 7

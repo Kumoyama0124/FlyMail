@@ -325,10 +325,474 @@ struct SpamSettingsView: View {
     private func reload() { block = SpamFilter.blockList; allow = SpamFilter.allowList }
 }
 
-/// AI 设置：先留一个入口，暂不提供二级设置。
+/// AI 设置统一入口：模型列表、主备调用顺序和个性化指令都集中在这里。
 struct AISettingsView: View {
+    @State private var profiles = AIModelStore.loadProfiles()
+    @State private var primaryID = AIModelStore.primaryProfileID
+    @State private var editorRequest: AIModelEditorRequest?
+    @State private var pendingDeleteID: String?
+    @State private var confirmDelete = false
+    @State private var isEditing = false
+    @State private var memorySummary = AIMemoryStore.summary
+
+    @AppStorage("ai.translationProfileID") private var translationProfileID = ""
+    @AppStorage(AIPersonalization.enterToSendKey) private var enterToSend = false
+    @AppStorage(AIMemoryStore.enabledKey) private var memoryEnabled = true
+    @AppStorage(AIPersonalization.nameKey) private var assistantName = "FlyMail 助手"
+    @AppStorage(AIPersonalization.languageKey) private var responseLanguage = "auto"
+    @AppStorage(AIPersonalization.toneKey) private var responseTone = "natural"
+    @AppStorage(AIPersonalization.instructionKey) private var customInstruction = ""
+
     var body: some View {
-        ContentUnavailableView("AI 暂未启用", systemImage: "sparkles")
-            .navigationTitle("AI")
+        List {
+            Section {
+                if profiles.isEmpty {
+                    ContentUnavailableView(
+                        "还没有模型",
+                        systemImage: "cpu",
+                        description: Text("添加一个或多个模型。首选模型失败时，可以自动尝试已启用的备用模型。")
+                    )
+                    .listRowBackground(Color.clear)
+                }
+
+                ForEach(profiles) { profile in
+                    modelRow(profile)
+                }
+                .onMove { source, destination in
+                    profiles.move(fromOffsets: source, toOffset: destination)
+                    AIModelStore.saveProfiles(profiles)
+                }
+
+                Button {
+                    editorRequest = AIModelEditorRequest(profile: AIModelProfile.makeDefault(), isNew: true)
+                } label: {
+                    Label("添加模型", systemImage: "plus.circle.fill")
+                }
+            } header: {
+                Text("模型配置")
+            } footer: {
+                Text("每个模型独立保存服务商、API 地址、模型名称和 API Key。可以添加多个配置，并在模型列表中拖动调整备用模型的尝试顺序。")
+            }
+
+            Section {
+                if profiles.isEmpty {
+                    Text("添加模型后即可选择首选和备用模型。")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Picker("首选模型", selection: $primaryID) {
+                        ForEach(profiles) { profile in
+                            Text(profile.name).tag(profile.id)
+                        }
+                    }
+
+                    ForEach(profiles.filter { $0.id != primaryID }) { profile in
+                        Toggle(isOn: Binding(
+                            get: { profile.isFallback },
+                            set: { setFallback(profile.id, enabled: $0) }
+                        )) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(profile.name)
+                                Text(profile.model).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            } header: {
+                Text("主模型与回退")
+            } footer: {
+                Text("先请求首选模型；失败、超时或返回错误时，按模型列表顺序尝试开启的备用模型。没有勾选为备用的模型不会被自动调用。")
+            }
+
+            Section {
+                TextField("助手名称", text: $assistantName)
+                Picker("回复语言", selection: $responseLanguage) {
+                    Text("跟随提问语言").tag("auto")
+                    Text("简体中文").tag("zh-Hans")
+                    Text("English").tag("en")
+                }
+                Picker("回复风格", selection: $responseTone) {
+                    Text("自然均衡").tag("natural")
+                    Text("简洁直接").tag("concise")
+                    Text("专业严谨").tag("professional")
+                    Text("友好耐心").tag("friendly")
+                    Text("详细解释").tag("detailed")
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("自定义个性化指令")
+                        .font(.subheadline.weight(.medium))
+                    TextEditor(text: $customInstruction)
+                        .frame(minHeight: 120)
+                        .scrollContentBackground(.hidden)
+                        .padding(8)
+                        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                    Text("例如：希望 AI 扮演什么角色、回答时遵守哪些习惯、哪些内容需要优先关注。此指令会应用到 AI 聊天和邮件 AI 功能。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("AI 个性化")
+            } footer: {
+                Text("这些设置保存在本机，并自动附加到每次 AI 请求中，不会覆盖邮件原文。")
+            }
+
+            Section {
+                Picker("默认翻译模型", selection: $translationProfileID) {
+                    Text("跟随首选模型").tag("")
+                    ForEach(profiles) { profile in
+                        Text(profile.name).tag(profile.id)
+                    }
+                }
+            } header: {
+                Text("翻译")
+            } footer: {
+                Text("翻译功能会优先使用这里指定的模型；留空时跟随首选模型。摘要、润色和其他邮件 AI 功能默认使用首选模型。")
+            }
+
+            Section {
+                Toggle("回车键发送", isOn: $enterToSend)
+            } header: {
+                Text("聊天体验")
+            } footer: {
+                Text("默认关闭。关闭时回车用于换行；开启后按回车直接发送，仍可使用发送按钮。")
+            }
+
+            Section {
+                Toggle("自动整理长期记忆", isOn: $memoryEnabled)
+                if memorySummary.isEmpty {
+                    Text("目前还没有整理出的长期记忆。对话积累后，FlyMail 会在后台自动压缩较早内容，提炼稳定偏好、项目和重要决定。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("当前记忆")
+                            .font(.subheadline.weight(.semibold))
+                        Text(memorySummary)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                }
+                Button("刷新记忆预览") { memorySummary = AIMemoryStore.summary }
+                Button("清空长期记忆", role: .destructive) {
+                    AIMemoryStore.clear()
+                    memorySummary = ""
+                }
+            } header: {
+                Text("AI 记忆")
+            } footer: {
+                Text("开启后，每累计一段对话会自动把较早内容压缩成简短记忆，作为后续聊天背景。记忆保存在本机；整理时会调用当前首选模型，可能产生少量 API 用量。")
+            }
+        }
+        .listStyle(.insetGrouped)
+        .environment(\.editMode, .constant(isEditing ? .active : .inactive))
+        .navigationTitle("AI")
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(isEditing ? "完成" : "排序") { isEditing.toggle() }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    editorRequest = AIModelEditorRequest(profile: AIModelProfile.makeDefault(), isNew: true)
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("添加模型")
+            }
+        }
+        .onAppear {
+            reload()
+            memorySummary = AIMemoryStore.summary
+        }
+        .onChange(of: primaryID) { _, newValue in
+            AIModelStore.setPrimaryProfileID(newValue)
+        }
+        .onChange(of: translationProfileID) { _, newValue in
+            AIModelStore.setTranslationProfileID(newValue)
+        }
+        .sheet(item: $editorRequest) { request in
+            NavigationStack {
+                AIModelEditorView(profile: request.profile, isNew: request.isNew) { saved in
+                    if let index = profiles.firstIndex(where: { $0.id == saved.id }) {
+                        profiles[index] = saved
+                    } else {
+                        profiles.append(saved)
+                    }
+                    AIModelStore.saveProfiles(profiles)
+                    if primaryID.isEmpty { primaryID = saved.id }
+                }
+            }
+        }
+        .confirmationDialog(
+            "删除模型配置？",
+            isPresented: $confirmDelete,
+            titleVisibility: .visible
+        ) {
+            Button("删除", role: .destructive) { deletePendingProfile() }
+            Button("取消", role: .cancel) { pendingDeleteID = nil }
+        } message: {
+            Text("该模型的本地配置和对应 API Key 都会被删除。")
+        }
+    }
+
+    @ViewBuilder
+    private func modelRow(_ profile: AIModelProfile) -> some View {
+        let configured = !(KeychainStore.get(AIModelStore.keychainKey(for: profile.id)) ?? "").isEmpty
+        HStack(spacing: 10) {
+            Button {
+                editorRequest = AIModelEditorRequest(profile: profile, isNew: false)
+            } label: {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(profile.name).font(.body.weight(.semibold)).foregroundColor(.primary)
+                    Text("\(profile.providerRaw) · \(profile.model)")
+                        .font(.footnote).foregroundColor(.secondary).lineLimit(1)
+                    Text(configured ? "API Key 已保存" : "尚未设置 API Key")
+                        .font(.caption2)
+                        .foregroundColor(configured ? Color.secondary : Color.orange)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .trailing, spacing: 5) {
+                if profile.id == primaryID {
+                    Text("首选").font(.caption2.weight(.semibold)).foregroundColor(.accentColor)
+                }
+                if profile.isFallback && profile.id != primaryID {
+                    Text("备用").font(.caption2).foregroundColor(.secondary)
+                }
+            }
+
+            Menu {
+                if profile.id != primaryID {
+                    Button("设为首选", systemImage: "star") { primaryID = profile.id }
+                }
+                Button(
+                    profile.isFallback ? "取消备用" : "设为备用",
+                    systemImage: profile.isFallback ? "minus.circle" : "arrow.uturn.backward"
+                ) {
+                    setFallback(profile.id, enabled: !profile.isFallback)
+                }
+                Button("编辑", systemImage: "pencil") {
+                    editorRequest = AIModelEditorRequest(profile: profile, isNew: false)
+                }
+                Button("删除", systemImage: "trash", role: .destructive) {
+                    pendingDeleteID = profile.id
+                    confirmDelete = true
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.title3)
+                    .foregroundColor(.secondary)
+                    .padding(.leading, 4)
+            }
+        }
+        .padding(.vertical, 3)
+    }
+
+    private func reload() {
+        profiles = AIModelStore.loadProfiles()
+        let savedPrimary = AIModelStore.primaryProfileID
+        if profiles.contains(where: { $0.id == savedPrimary }) {
+            primaryID = savedPrimary
+        } else {
+            primaryID = profiles.first?.id ?? ""
+        }
+        AIModelStore.setPrimaryProfileID(primaryID)
+    }
+
+    private func setFallback(_ id: String, enabled: Bool) {
+        guard let index = profiles.firstIndex(where: { $0.id == id }) else { return }
+        profiles[index].isFallback = enabled
+        AIModelStore.saveProfiles(profiles)
+    }
+
+    private func deletePendingProfile() {
+        guard let id = pendingDeleteID else { return }
+        KeychainStore.delete(AIModelStore.keychainKey(for: id))
+        profiles.removeAll { $0.id == id }
+        AIModelStore.saveProfiles(profiles)
+        if primaryID == id {
+            primaryID = profiles.first?.id ?? ""
+        }
+        AIModelStore.setPrimaryProfileID(primaryID)
+        pendingDeleteID = nil
+    }
+}
+
+private struct AIModelEditorRequest: Identifiable {
+    let profile: AIModelProfile
+    let isNew: Bool
+    var id: String { profile.id }
+}
+
+private struct AIModelEditorView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var draft: AIModelProfile
+    @State private var apiKey = ""
+    @State private var testing = false
+    @State private var testResult: String?
+    @State private var testError = false
+
+    let isNew: Bool
+    let onSave: (AIModelProfile) -> Void
+
+    init(profile: AIModelProfile, isNew: Bool, onSave: @escaping (AIModelProfile) -> Void) {
+        _draft = State(initialValue: profile)
+        self.isNew = isNew
+        self.onSave = onSave
+    }
+
+    private var savedKeyExists: Bool {
+        !(KeychainStore.get(AIModelStore.keychainKey(for: draft.id)) ?? "").isEmpty
+    }
+
+    private var effectiveKey: String {
+        let entered = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        return entered.isEmpty
+            ? (KeychainStore.get(AIModelStore.keychainKey(for: draft.id)) ?? "")
+            : entered
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                TextField("配置名称", text: $draft.name)
+                Picker("服务商", selection: $draft.providerRaw) {
+                    ForEach(AIProvider.allCases) { provider in
+                        Text(provider.rawValue).tag(provider.rawValue)
+                    }
+                }
+                TextField("API Base URL", text: $draft.baseURL)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                TextField("模型名称", text: $draft.model)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                if FlyMailAI.canControlReasoning(draft) {
+                    Picker("默认思考等级", selection: $draft.reasoningDefaultRaw) {
+                        ForEach(AIReasoningLevel.allCases) { level in
+                            Text(level.title).tag(level.rawValue)
+                        }
+                    }
+                } else {
+                    Label("该模型不支持通过此 API 单独调整思考等级", systemImage: "info.circle")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                if draft.provider == .zhipu && draft.model.lowercased().contains("glm-5.3") {
+                    Text("GLM-5.3 强制启用思考；选择“关闭”时会自动使用最低思考强度。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if draft.provider == .gemini && draft.model.lowercased().contains("2.5") && draft.model.lowercased().contains("pro") {
+                    Text("Gemini 2.5 Pro 不支持完全关闭思考；关闭选项会使用最低可用预算。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("基本信息")
+            } footer: {
+                Text("请填写服务商提供的兼容 API 根地址和模型 ID。Claude 使用 Anthropic Messages API，其余服务商使用 Chat Completions API。")
+            }
+
+            Section {
+                SecureField(savedKeyExists ? "已保存密钥，留空则不修改" : "粘贴 API Key", text: $apiKey)
+                if savedKeyExists {
+                    Label("已有 API Key 保存在 iOS 钥匙串", systemImage: "lock.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("API Key")
+            } footer: {
+                Text("每个模型单独保存密钥。密钥仅保存在本机钥匙串中，只有发起 AI 请求时才发送给对应服务商。")
+            }
+
+            Section {
+                Button {
+                    runConnectionTest()
+                } label: {
+                    HStack {
+                        Text("测试连接")
+                        Spacer()
+                        if testing { ProgressView() }
+                    }
+                }
+                .disabled(testing || effectiveKey.isEmpty || draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                          draft.baseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                if let testResult {
+                    Text(testResult)
+                        .font(.footnote)
+                        .foregroundStyle(testError ? .red : .secondary)
+                        .textSelection(.enabled)
+                }
+            }
+        }
+        .navigationTitle(isNew ? "添加模型" : "编辑模型")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("取消") { dismiss() }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("保存") { save() }
+                    .disabled(
+                        draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                        draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                        draft.baseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                        effectiveKey.isEmpty
+                    )
+            }
+        }
+        .onChange(of: draft.providerRaw) { _, value in
+            let provider = AIProvider(rawValue: value) ?? .custom
+            draft.name = provider.rawValue
+            draft.baseURL = provider.baseURL
+            draft.model = provider.defaultModel
+            testResult = nil
+        }
+    }
+
+    private func save() {
+        let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !key.isEmpty {
+            KeychainStore.set(key, for: AIModelStore.keychainKey(for: draft.id))
+        }
+        if draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            draft.name = draft.providerRaw
+        }
+        onSave(draft)
+        dismiss()
+    }
+
+    private func runConnectionTest() {
+        testing = true
+        testResult = nil
+        let profile = draft
+        let key = effectiveKey
+        Task {
+            do {
+                _ = try await FlyMailAI.chat(
+                    profile: profile,
+                    apiKey: key,
+                    messages: [AIChatMessage(role: "user", content: "请仅回复：连接成功")]
+                )
+                await MainActor.run {
+                    testResult = "连接成功，模型已正常响应。"
+                    testError = false
+                    testing = false
+                }
+            } catch {
+                let message = error.localizedDescription
+                await MainActor.run {
+                    testResult = message
+                    testError = true
+                    testing = false
+                }
+            }
+        }
     }
 }
