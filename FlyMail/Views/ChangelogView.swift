@@ -35,25 +35,33 @@ struct BrandIcon: View {
     }
 }
 
-/// 关于：每一项各占一行 —— GitHub 作者一行、GitHub 项目一行、Discord 一行，
+/// 关于：每一项各占一行 —— GitHub 项目一行、E-mail 反馈一行、Discord 一行，
 /// 版本放最后一个（点进去是产品信息页，不是更新日志）。
 /// 关于不再直接放在“我的”页上，而是放在“帮助与反馈”二级页里。
 struct AboutSectionView: View {
     var body: some View {
         Section {
-            Link(destination: URL(string: "https://github.com/baozhididi")!) {
+            Link(destination: URL(string: "https://github.com/baozhididi/FlyMail")!) {
                 HStack(spacing: 10) {
-                    BrandIcon(domain: "github.com", fallback: "chevron.left.forwardslash.chevron.right", label: "GitHub 作者")
-                    Text("baozhididi")
+                    BrandIcon(domain: "github.com", fallback: "chevron.left.forwardslash.chevron.right", label: "GitHub 项目")
+                    Text("FlyMail")
                     Spacer()
                     Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 2)
             }
-            Link(destination: URL(string: "https://github.com/baozhididi/FlyMail")!) {
+            // E-mail 反馈：信封图标 + E-mail，点开直接拉起系统邮件，收件人已填好
+            Link(destination: URL(string: "mailto:baozhididi@sina.com?subject=FlyMail%20反馈")!) {
                 HStack(spacing: 10) {
-                    BrandIcon(domain: "github.com", fallback: "chevron.left.forwardslash.chevron.right", label: "GitHub 项目")
-                    Text("FlyMail")
+                    ZStack {
+                        Circle().fill(Color.accentColor.opacity(0.12))
+                        Image(systemName: "envelope.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color.accentColor)
+                    }
+                    .frame(width: 30, height: 30)
+                    .accessibilityLabel("E-mail")
+                    Text("E-mail")
                     Spacer()
                     Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
                 }
