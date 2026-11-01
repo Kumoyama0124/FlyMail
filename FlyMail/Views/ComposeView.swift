@@ -18,8 +18,6 @@ struct ComposeView: View {
     @State private var lastServerSaveTime = Date.distantPast
     @State private var confirmClose = false
     @State private var finished = false
-    private enum Field { case to }
-    @FocusState private var focus: Field?
     private let autosave = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -30,14 +28,13 @@ struct ComposeView: View {
                         ForEach(accounts) { Text($0.email).tag(Optional($0.id)) }
                     }
                     TextField("收件人", text: $draft.to).keyboardType(.emailAddress).textInputAutocapitalization(.never)
-                        .focused($focus, equals: .to)
                     if showCc {
                         TextField("抄送", text: $draft.cc).keyboardType(.emailAddress).textInputAutocapitalization(.never)
                         TextField("密送", text: $draft.bcc).keyboardType(.emailAddress).textInputAutocapitalization(.never)
                     } else { Button("添加抄送/密送") { showCc = true } }
                     TextField("主题", text: $draft.subject)
                 }
-                Section { TextEditor(text: $draft.body).frame(minHeight: 240).accessibilityLabel("正文") }
+                Section { TextEditor(text: $draft.body).frame(minHeight: 240) }
                 Section("附件") {
                     ForEach(draft.attachments) { a in
                         Label("\(a.filename)（\(ByteCountFormatter.string(fromByteCount: Int64(a.data.count), countStyle: .file))）", systemImage: "paperclip")
@@ -58,7 +55,6 @@ struct ComposeView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(scheduled ? "安排" : "发送") { Task { await send() } }
-                        .fontWeight(.semibold)
                         .disabled(sending || draft.accountID == nil || MIMEParser.addresses(draft.to).isEmpty)
                 }
             }
@@ -84,8 +80,6 @@ struct ComposeView: View {
             }
             .onDisappear { if !finished && !isEmpty { LocalDraftStore.save(draft) } }
             .onAppear {
-                // 新写邮件直接把光标放进收件人，不用再点一下
-                if draft.to.isEmpty { focus = .to }
                 if draft.accountID == nil {
                     let pref = UUID(uuidString: UserDefaults.standard.string(forKey: Prefs.defaultAccount) ?? "")
                     draft.accountID = accounts.first(where: { $0.id == pref })?.id ?? accounts.first?.id

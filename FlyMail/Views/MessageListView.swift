@@ -173,23 +173,19 @@ struct MessageListView: View {
         // dock 现在高约 60 + 底部 2pt，offset -84 正好把按钮放在 dock 上面约 22pt，像 Zoho 那样，不再飘到中间
         .overlay(alignment: .bottomTrailing) {
             Button { app.composeDraft = ComposeDraft(accountID: nil) } label: {
-                ZStack {
-                    Circle().glassEffect(.regular.tint(Color(red: 32/255, green: 129/255, blue: 241/255)), in: Circle())
-                    Image(systemName: "square.and.pencil")
-                        .font(.title2)
-                        .foregroundStyle(.white)
-                }
-                .frame(width: 56, height: 56)
-                .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
-                .contentShape(Circle())
+                // 玻璃直接作用在内容上（而不是 ZStack 里垫一个 Circle）：
+                // 图标会自动走玻璃的 vibrancy；interactive 给按下时的缩放 + 高光反馈，和系统按钮一样。
+                Image(systemName: "square.and.pencil")
+                    .font(.title2)
+                    .foregroundStyle(.white)
+                    .frame(width: 56, height: 56)
+                    .glassEffect(.regular.tint(Color(red: 32/255, green: 129/255, blue: 241/255)).interactive(), in: Circle())
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("写邮件")
             .offset(x: -16, y: -84)
         }
         .navigationTitle(title)
-        // 筛选生效时，标题下方显示当前筛选，避免“邮件怎么少了”的困惑
-        .navigationSubtitle(filter == .all ? "" : "筛选：\(filter.title)")
         .confirmationDialog(role == "trash" ? "永久删除废纸箱中的所有邮件？" : "永久删除所有垃圾邮件？",
                             isPresented: $confirmEmpty, titleVisibility: .visible) {
             Button(role == "trash" ? "清空废纸箱" : "清空垃圾邮件", role: .destructive) {
@@ -201,17 +197,14 @@ struct MessageListView: View {
         // 已经有放大镜按钮，点进去就是聚合搜索，不需要两处搜索
         .toolbar {
             // 列表里的搜索只搜当前邮箱；点放大镜进聚合搜索，可搜全部账户、服务器上的旧邮件
-            ToolbarItem { Button { app.showingSearch = true } label: { Image(systemName: "magnifyingglass") }.accessibilityLabel("搜索") }
+            ToolbarItem { Button { app.showingSearch = true } label: { Image(systemName: "magnifyingglass") } }
             // 筛选菜单：全部/未读/已读/VIP，不再只有一个未读开关
             ToolbarItem {
                 Menu {
                     Picker("筛选", selection: $filter) {
                         ForEach(ListFilter.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
-                } label: {
-                    Image(systemName: filter == .all ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
-                }
-                .accessibilityLabel(filter == .all ? "筛选" : "筛选：\(filter.title)")
+                } label: { Image(systemName: "line.3.horizontal.decrease.circle") }
             }
             // 更多菜单：编辑显示设置（只在总收件箱出现，里面直接改哪些邮箱在总收件箱展示）
             ToolbarItem {
@@ -223,7 +216,6 @@ struct MessageListView: View {
                         for m in filtered where !m.isRead { MessageActions.toggleRead(m, app: app, context: context) }
                     }.disabled(filtered.allSatisfy(\.isRead))
                 } label: { Image(systemName: "ellipsis.circle") }
-                .accessibilityLabel("更多")
             }
             if role == "trash" || role == "junk" {
                 ToolbarItem { Button(role == "trash" ? "清空废纸箱" : "清空", role: .destructive) { confirmEmpty = true }.disabled(messages.isEmpty) }
@@ -345,8 +337,6 @@ struct MessageRow: View {
     @AppStorage(Prefs.showAvatars) private var showAvatars = true
 
     private var isSpam: Bool { message.spamScore >= SpamFilter.threshold || message.folder?.role == "junk" }
-    /// 未读：最新一封未读，或会话里还有未读的旧邮件
-    private var isUnread: Bool { !(message.isRead && threadUnread == 0) }
 
     var body: some View {
         HStack(alignment: .top, spacing: density == 0 ? 6 : 10) {
@@ -361,10 +351,7 @@ struct MessageRow: View {
                     if let acc = message.folder?.account {
                         Circle().fill(Prefs.palette[acc.colorIndex % Prefs.palette.count]).frame(width: 6, height: 6)
                     }
-                    Text(displayName(message.from))
-                        .font(density == 0 ? .subheadline : .headline)
-                        .fontWeight(isUnread ? .bold : .regular)
-                        .lineLimit(1)
+                    Text(displayName(message.from)).font(density == 0 ? .subheadline.bold() : .headline).lineLimit(1)
                     if threadCount > 1 { Text("\(threadCount)").font(.caption2).padding(.horizontal, 5).background(Capsule().fill(.quaternary)) }
                     if VIPStore.contains(message.from) { Image(systemName: "star.circle.fill").foregroundStyle(.yellow).font(.caption) }
                     Spacer()
@@ -375,19 +362,13 @@ struct MessageRow: View {
                     if message.hasAttachment || !message.attachmentNames.isEmpty { Image(systemName: "paperclip").font(.caption).foregroundStyle(.secondary) }
                     Text(message.date, format: .relative(presentation: .named)).font(.caption).foregroundStyle(.secondary)
                 }
-                Text(message.subject)
-                    .font(density == 0 ? .caption : .subheadline)
-                    .fontWeight(isUnread ? .semibold : .regular)
-                    .foregroundStyle(isUnread ? .primary : .secondary)
-                    .lineLimit(1)
+                Text(message.subject).font(density == 0 ? .caption : .subheadline).lineLimit(1)
                 if previewLines > 0 && !message.snippet.isEmpty && density > 0 {
                     Text(message.snippet).font(.caption).foregroundStyle(.secondary).lineLimit(previewLines)
                 }
             }
         }
         .padding(.vertical, [0, 2, 6][min(max(density, 0), 2)])
-        .accessibilityElement(children: .combine)
-        .accessibilityValue(isUnread ? "未读" : "已读")
     }
 }
 
