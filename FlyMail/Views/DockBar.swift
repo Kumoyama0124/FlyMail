@@ -42,6 +42,19 @@ struct DockBar: View {
                 Color.clear
                     .frame(maxWidth: .infinity)
                     .frame(height: itemHeight + inset * 2)
+                    // 稳定的浅色磨砂底，避免背景文字/卡片透过 Dock 形成重影。
+                    .background {
+                        Capsule()
+                            .fill(.regularMaterial)
+                            .overlay {
+                                Capsule()
+                                    .fill(Color(uiColor: .systemBackground).opacity(0.52))
+                            }
+                    }
+                    .overlay {
+                        Capsule()
+                            .strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.7)
+                    }
                     .glassEffect(.regular, in: Capsule())
                 slider
                 labels
@@ -66,7 +79,16 @@ struct DockBar: View {
         let x = inset + CGFloat(progress) * tabWidth - (w - tabWidth) / 2
         return Color.clear
             .frame(width: w, height: h)
-            .glassEffect(.regular.tint(.white.opacity(0.58)).interactive(), in: Capsule())
+            // 选中态使用稳定磨砂填充，减少对下方页面内容的放大和折射。
+            .background {
+                Capsule()
+                    .fill(Color(uiColor: .secondarySystemBackground).opacity(0.88))
+                    .overlay {
+                        Capsule()
+                            .strokeBorder(Color.white.opacity(0.72), lineWidth: 0.8)
+                    }
+            }
+            .glassEffect(.regular, in: Capsule())
             .offset(x: x)
             .allowsHitTesting(false)
     }
@@ -83,7 +105,7 @@ struct DockBar: View {
                     Text(Self.title(tab)).font(.caption2.weight(.medium))
                 }
                 // 未选中黑色，选中强调色；选中栏图标稍微放大
-                .foregroundStyle(on ? Color.accentColor : .primary)
+                .foregroundStyle(on ? Color.accentColor : Color.primary.opacity(0.58))
                 .scaleEffect(on ? 1.08 : 1)
                 .frame(maxWidth: .infinity)
                 .frame(height: itemHeight)
