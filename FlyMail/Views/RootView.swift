@@ -25,7 +25,7 @@ struct RootView: View {
                     switch app.dockTab {
                     case .home: HomeView().transition(tabTransition)
                     case .mail: mailSplitView.transition(tabTransition)
-                    case .ai: AIPlaceholderView().transition(tabTransition)
+                    case .ai: AIChatView().transition(tabTransition)
                     case .my: MyView().transition(tabTransition)
                     }
                 } else {
