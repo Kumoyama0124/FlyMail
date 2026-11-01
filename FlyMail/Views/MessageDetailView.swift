@@ -28,6 +28,7 @@ struct MessageDetailView: View {
     @State private var attachmentURLs: [String: URL] = [:]
 
     @State private var confirmDelete = false
+    @State private var aiPrompt = ""
 
     var body: some View {
         ScrollView {
@@ -71,6 +72,7 @@ struct MessageDetailView: View {
         .task(id: message.persistentModelID) { await load(); refreshAttachmentURLs() }
         .sheet(item: $moving) { MoveFolderPicker(message: $0) }
         .sheet(item: $previewURL) { QuickLookView(url: $0).ignoresSafeArea() }
+        .sheet(isPresented: Binding(get: { !aiPrompt.isEmpty }, set: { if !$0 { aiPrompt = "" } })) { AIChatView(initialPrompt: aiPrompt) }
         .confirmationDialog(isTrashLike ? "永久删除这封邮件？" : "删除这封邮件？", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("删除", role: .destructive) { deleteCurrent() }
         }
@@ -104,6 +106,11 @@ struct MessageDetailView: View {
                 barButton("trash") { confirmDelete = true }
                 barButton("folder") { moving = message }
                 Menu {
+                    Button("AI 总结邮件", systemImage: "sparkles") { openAI("请用中文总结这封邮件的核心内容、重要信息和需要我采取的行动。\\n\\n主题：\\(message.subject)\\n发件人：\\(message.from)\\n\\n\\(message.bodyText)") }
+                    Button("AI 翻译为中文", systemImage: "translate") { openAI("请将以下邮件完整翻译为简体中文，保留原意、格式和专有名词。\\n\\n主题：\\(message.subject)\\n\\n\\(message.bodyText)") }
+                    Button("AI 润色邮件", systemImage: "pencil.and.outline") { openAI("请润色以下邮件，使表达更清晰、自然、专业，不改变原意。请直接给出润色后的正文。\\n\\n主题：\\(message.subject)\\n\\n\\(message.bodyText)") }
+                    Button("AI 生成回复", systemImage: "text.bubble") { openAI("请根据以下邮件内容，帮我起草一封合适的中文回复。语气礼貌、简洁、专业；如有必要先提出需要确认的信息。\\n\\n主题：\\(message.subject)\\n发件人：\\(message.from)\\n\\n\\(message.bodyText)") }
+                    Divider()
                     Button("回复", systemImage: "arrowshape.turn.up.left") { reply(all: false) }
                     Button("全部回复", systemImage: "arrowshape.turn.up.left.2") { reply(all: true) }
                     Button("转发", systemImage: "arrowshape.turn.up.right") { forward() }
@@ -126,6 +133,8 @@ struct MessageDetailView: View {
         }
         .padding(.horizontal, 18).padding(.bottom, 8)
     }
+
+    private func openAI(_ prompt: String) { aiPrompt = prompt }
 
     private func barButton(_ icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) { Image(systemName: icon).font(.title3).frame(width: 52, height: 46) }
