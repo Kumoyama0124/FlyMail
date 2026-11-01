@@ -1,4 +1,4 @@
-name: Build signed FlyMail IPA
+name: Build unsigned FlyMail IPA
 on:
   workflow_dispatch:
   push:
@@ -18,59 +18,29 @@ jobs:
         run: brew install xcodegen
       - name: Generate project
         run: xcodegen generate
-      - name: Install signing assets
-        env:
-          CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
-          PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+      - name: Archive without code signing
+        run: |
+          xcodebuild archive \
+            -project FlyMail.xcodeproj \
+            -scheme FlyMail \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/FlyMail.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+      - name: Package unsigned IPA
         run: |
           set -euo pipefail
-          for v in CERTIFICATE_BASE64 CERTIFICATE_PASSWORD PROFILE_BASE64; do
-            if [[ -z "${!v}" ]]; then echo "Missing GitHub signing secret: $v"; exit 1; fi
-          done
-          CERT="$RUNNER_TEMP/certificate.p12"
-          PROFILE="$RUNNER_TEMP/profile.mobileprovision"
-          KEYCHAIN="$RUNNER_TEMP/flymail.keychain"
-          echo "$CERTIFICATE_BASE64" | base64 --decode > "$CERT"
-          echo "$PROFILE_BASE64" | base64 --decode > "$PROFILE"
-          security create-keychain -p "$CERTIFICATE_PASSWORD" "$KEYCHAIN"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN"
-          security unlock-keychain -p "$CERTIFICATE_PASSWORD" "$KEYCHAIN"
-          security import "$CERT" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
-          security list-keychains -d user -s "$KEYCHAIN"
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$CERTIFICATE_PASSWORD" "$KEYCHAIN"
-          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          UUID=$(security cms -D -i "$PROFILE" | /usr/libexec/PlistBuddy -c 'Print UUID' /dev/stdin)
-          cp "$PROFILE" "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
-      - name: Archive
-        env:
-          TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
-          PROFILE_NAME: ${{ secrets.IOS_PROVISIONING_PROFILE_NAME }}
-        run: |
-          xcodebuild archive -project FlyMail.xcodeproj -scheme FlyMail -configuration Release -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/FlyMail.xcarchive" DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="Apple Distribution" PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" CODE_SIGNING_ALLOWED=YES
-      - name: Export IPA
-        env:
-          TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
-          PROFILE_NAME: ${{ secrets.IOS_PROVISIONING_PROFILE_NAME }}
-        run: |
-          cat > "$RUNNER_TEMP/ExportOptions.plist" <<'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0"><dict>
-          <key>method</key><string>ad-hoc</string>
-          <key>teamID</key><string>${TEAM_ID}</string>
-          <key>signingStyle</key><string>manual</string>
-          <key>provisioningProfiles</key><dict>
-          <key>com.gymbull.flymail</key><string>${PROFILE_NAME}</string>
-          </dict>
-          <key>compileBitcode</key><false/>
-          <key>stripSwiftSymbols</key><true/>
-          </dict></plist>
-          PLIST
-          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/FlyMail.xcarchive" -exportPath "$RUNNER_TEMP/export" -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+          APP="$RUNNER_TEMP/FlyMail.xcarchive/Products/Applications/FlyMail.app"
+          test -d "$APP"
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/Payload/FlyMail.app"
+          cd "$RUNNER_TEMP"
+          /usr/bin/zip -qry FlyMail-unsigned.ipa Payload
       - uses: actions/upload-artifact@v4
         with:
-          name: FlyMail-IPA
-          path: ${{ runner.temp }}/export/*.ipa
+          name: FlyMail-unsigned-IPA
+          path: ${{ runner.temp }}/FlyMail-unsigned.ipa
           if-no-files-found: error
           retention-days: 7
