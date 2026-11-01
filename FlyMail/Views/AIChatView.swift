@@ -73,8 +73,12 @@ struct AIChatView: View {
             do {
                 let answer = try await FlyMailAI.chat(messages: messages)
                 await MainActor.run { messages.append(AIChatMessage(role: "assistant", content: answer)); sending = false }
-            } catch {
-                await MainActor.run { error = error.localizedDescription; sending = false }
+            } catch let requestError {
+                let message = requestError.localizedDescription
+                await MainActor.run {
+                    self.error = message
+                    sending = false
+                }
             }
         }
     }
