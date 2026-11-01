@@ -485,10 +485,10 @@ struct AISettingsView: View {
         }
         .listStyle(.insetGrouped)
         .environment(\.editMode, .constant(isEditing ? .active : .inactive))
-        .navigationTitle("AI")
+        .navigationTitle("AI 设置")
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button(isEditing ? "完成" : "排序") { isEditing.toggle() }
+                Button(isEditing ? "完成" : "编辑") { isEditing.toggle() }
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -672,10 +672,13 @@ private struct AIModelEditorView: View {
                     .autocorrectionDisabled()
                 if FlyMailAI.canControlReasoning(draft) {
                     Picker("默认思考等级", selection: $draft.reasoningDefaultRaw) {
-                        ForEach(AIReasoningLevel.allCases) { level in
-                            Text(level.title).tag(level.rawValue)
+                        ForEach(FlyMailAI.reasoningOptions(for: draft)) { level in
+                            Text(FlyMailAI.reasoningTitle(level, for: draft)).tag(level.rawValue)
                         }
                     }
+                    Text("新配置默认关闭思考。部分型号不支持彻底关闭，选择关闭时会使用该型号官方允许的最低档位。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 } else {
                     Label("该模型不支持通过此 API 单独调整思考等级", systemImage: "info.circle")
                         .font(.footnote)

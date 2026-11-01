@@ -75,6 +75,7 @@ enum AIReasoningLevel: String, CaseIterable, Identifiable, Codable {
     case low
     case medium
     case high
+    case xhigh
     case max
 
     var id: String { rawValue }
@@ -85,6 +86,7 @@ enum AIReasoningLevel: String, CaseIterable, Identifiable, Codable {
         case .low: "低"
         case .medium: "中"
         case .high: "高"
+        case .xhigh: "极高"
         case .max: "最高"
         }
     }
@@ -95,6 +97,7 @@ enum AIReasoningLevel: String, CaseIterable, Identifiable, Codable {
         case .low: "轻量推理"
         case .medium: "均衡推理"
         case .high: "深入推理"
+        case .xhigh: "超高推理强度"
         case .max: "最大推理强度"
         }
     }
@@ -380,27 +383,59 @@ enum FlyMailAI {
         return profiles.first(where: { $0.id == AIModelStore.primaryProfileID }) ?? profiles.first
     }
 
-    static func canControlReasoning(_ profile: AIModelProfile) -> Bool {
+    /// 按服务商官方 API 能力给出可选档位。关闭项始终保留为默认值；
+    /// 对官方不允许完全关闭的型号，发送时降到该型号最低可用档位。
+    static func reasoningOptions(for profile: AIModelProfile) -> [AIReasoningLevel] {
         let model = profile.model.lowercased()
         switch profile.provider {
         case .openAI:
-            return model.hasPrefix("gpt-5") || model.hasPrefix("gpt-6") ||
-                model.hasPrefix("o1") || model.hasPrefix("o3") || model.hasPrefix("o4")
+            guard model.hasPrefix("gpt-5") || model.hasPrefix("gpt-6") ||
+                    model.hasPrefix("o1") || model.hasPrefix("o3") || model.hasPrefix("o4") else { return [] }
+            return [.off, .low, .medium, .high, .xhigh, .max]
         case .claude:
-            return model.contains("3-7") || model.contains("4-") || model.contains("opus-5") || model.contains("sonnet-5")
+            guard model.contains("3-7") || model.contains("4-") ||
+                    model.contains("opus-5") || model.contains("sonnet-5") || model.contains("haiku-5") else { return [] }
+            return [.off, .low, .medium, .high, .max]
         case .gemini:
-            return model.contains("2.5") || model.contains("gemini-3") || model.contains("gemini-4")
+            guard model.contains("2.5") || model.contains("gemini-3") || model.contains("gemini-4") else { return [] }
+            return [.off, .low, .medium, .high]
         case .zhipu:
-            return model.contains("glm-5.2") || model.contains("glm-5.3")
+            if model.contains("glm-5.3") { return [.off, .low, .high, .max] }
+            if model.contains("glm-5.2") { return [.off, .high, .max] }
+            return []
         case .qwen:
-            return model.contains("qwen3")
+            if model.contains("qwen3.8") { return [.off, .low, .medium, .xhigh] }
+            if model.contains("qwen3") { return [.off, .low, .medium, .high] }
+            return []
         case .kimi:
-            return model.contains("k2.5") || model.contains("k2.6")
+            if model.contains("k2.6") || model.contains("k2.7") { return [.off, .high] }
+            return []
         case .deepSeek:
-            return model.contains("deepseek-v4") || model.contains("deepseek-v3.2")
+            if model.contains("deepseek-v4") || model.contains("deepseek-v3.2") {
+                return [.off, .low, .high, .max]
+            }
+            return []
         case .custom:
-            return false
+            return []
         }
+    }
+
+    static func canControlReasoning(_ profile: AIModelProfile) -> Bool {
+        !reasoningOptions(for: profile).isEmpty
+    }
+
+    static func reasoningTitle(_ level: AIReasoningLevel, for profile: AIModelProfile) -> String {
+        let model = profile.model.lowercased()
+        if profile.provider == .kimi && level != .off { return "开启" }
+        if level == .off {
+            let cannotDisable =
+                (profile.provider == .zhipu && model.contains("glm-5.3")) ||
+                (profile.provider == .claude && (model.contains("opus-5") || model.contains("sonnet-5") || model.contains("haiku-5"))) ||
+                (profile.provider == .gemini && (!model.contains("2.5") || model.contains("2.5-pro"))) ||
+                (profile.provider == .openAI && (model.contains("gpt-6-astra") || model.contains("gpt-6.1-sol")))
+            return cannotDisable ? "关闭（最低档）" : "关闭"
+        }
+        return level.title
     }
 
     /// 主模型优先；主模型失败时，按设置列表中的顺序尝试已启用的备用模型。
@@ -591,48 +626,67 @@ enum FlyMailAI {
 
         switch profile.provider {
         case .openAI:
-            body["reasoning_effort"] = level.rawValue == "max" ? "xhigh" : level.rawValue
+            // GPT-6 Astra 与 GPT-6.1 Sol 不接受 none；“关闭”按官方说明降到 low。
+            if level == .off && (model.contains("gpt-6-astra") || model.contains("gpt-6.1-sol")) {
+                body["reasoning_effort"] = "low"
+            } else {
+                body["reasoning_effort"] = level == .off ? "none" : level.rawValue
+            }
         case .deepSeek:
             if level == .off {
                 body["thinking"] = ["type": "disabled"]
                 body["reasoning_effort"] = "none"
             } else {
                 body["thinking"] = ["type": "enabled"]
-                body["reasoning_effort"] = level == .medium || level == .low ? "low" : (level == .max ? "max" : "high")
+                switch level {
+                case .off: body["reasoning_effort"] = "none"
+                case .low: body["reasoning_effort"] = "low"
+                case .medium, .high, .xhigh: body["reasoning_effort"] = "high"
+                case .max: body["reasoning_effort"] = "max"
+                }
             }
         case .zhipu:
             if model.contains("glm-5.3") {
+                // GLM-5.3 始终开启思考，最低档为 low。
                 body["thinking"] = ["type": "enabled", "clear_thinking": false]
-                body["reasoning_effort"] = level == .off || level == .low ? "low" : (level == .medium ? "high" : "max")
-            } else if level == .off || level == .low || level == .medium {
-                body["thinking"] = ["type": level == .off ? "disabled" : "enabled", "clear_thinking": false]
-                if model.contains("glm-5.2") {
-                    body["reasoning_effort"] = level == .off ? "none" : "high"
-                }
+                let effort = level == .off || level == .low ? "low" :
+                    (level == .medium || level == .high ? "high" : "max")
+                body["reasoning_effort"] = effort
             } else {
-                body["thinking"] = ["type": "enabled", "clear_thinking": false]
-                body["reasoning_effort"] = level == .max ? "max" : "high"
+                let isOff = level == .off
+                body["thinking"] = ["type": isOff ? "disabled" : "enabled", "clear_thinking": false]
+                if model.contains("glm-5.2") {
+                    body["reasoning_effort"] = isOff ? "none" :
+                        ((level == .xhigh || level == .max) ? "max" : "high")
+                }
             }
         case .qwen:
             if model.contains("qwen3.8") {
-                if level == .off {
-                    body["enable_thinking"] = false
-                } else {
-                    body["enable_thinking"] = true
-                    body["reasoning_effort"] = level == .low ? "low" : (level == .medium ? "medium" : "xhigh")
+                body["enable_thinking"] = level != .off
+                if level != .off {
+                    switch level {
+                    case .off: break
+                    case .low: body["reasoning_effort"] = "low"
+                    case .medium: body["reasoning_effort"] = "medium"
+                    case .high, .xhigh, .max: body["reasoning_effort"] = "xhigh"
+                    }
                 }
             } else {
                 body["enable_thinking"] = level != .off
                 if level != .off {
-                    body["thinking_budget"] = level == .low ? 4096 : (level == .medium ? 8192 : 16384)
+                    let budget: Int
+                    switch level {
+                    case .off: budget = 0
+                    case .low: budget = 4096
+                    case .medium: budget = 8192
+                    case .high, .xhigh, .max: budget = 16384
+                    }
+                    body["thinking_budget"] = budget
                 }
             }
         case .kimi:
-            if model.contains("k2.6") {
-                body["thinking"] = ["type": level == .off ? "disabled" : "enabled", "keep": "all"]
-            } else {
-                body["thinking"] = ["type": level == .off ? "disabled" : "enabled"]
-            }
+            // Kimi 当前在此兼容接口中暴露的是思考开关，不伪装成多档强度。
+            body["thinking"] = ["type": level == .off ? "disabled" : "enabled", "keep": "all"]
         case .claude, .gemini, .custom:
             break
         }
@@ -660,14 +714,25 @@ enum FlyMailAI {
         var body: [String: Any] = ["model": profile.model, "max_tokens": 8192, "messages": turns]
         if let system, !system.isEmpty { body["system"] = system }
 
-        if reasoning != .off, canControlReasoning(profile) {
+        if canControlReasoning(profile) {
             let model = profile.model.lowercased()
-            if model.contains("4-6") || model.contains("4-7") || model.contains("4-8") ||
-                model.contains("opus-5") || model.contains("sonnet-5") {
+            let usesAdaptiveThinking = model.contains("4-6") || model.contains("4-7") ||
+                model.contains("4-8") || model.contains("opus-5") ||
+                model.contains("sonnet-5") || model.contains("haiku-5")
+
+            if usesAdaptiveThinking {
+                // 对始终开启思考的 Claude 型号，“关闭”映射为最低 effort。
                 body["thinking"] = ["type": "adaptive"]
-                body["output_config"] = ["effort": reasoning == .max ? "high" : reasoning.rawValue]
-            } else {
-                let budget = reasoning == .low ? 1024 : (reasoning == .medium ? 4096 : (reasoning == .high ? 8192 : 12000))
+                body["output_config"] = ["effort": reasoning == .off ? "low" : reasoning.rawValue]
+            } else if reasoning != .off {
+                let budget: Int
+                switch reasoning {
+                case .off: budget = 0
+                case .low: budget = 1024
+                case .medium: budget = 4096
+                case .high: budget = 8192
+                case .xhigh, .max: budget = 12000
+                }
                 body["thinking"] = ["type": "enabled", "budget_tokens": budget]
                 body["max_tokens"] = max(8192, budget + 4096)
             }
@@ -722,7 +787,14 @@ enum FlyMailAI {
                 if profile.model.lowercased().contains("pro") && reasoning == .off {
                     thinking["thinkingBudget"] = 128
                 } else {
-                    let budget = reasoning == .off ? 0 : (reasoning == .low ? 1024 : (reasoning == .medium ? 8192 : (reasoning == .high ? 16384 : 24576)))
+                    let budget: Int
+                    switch reasoning {
+                    case .off: budget = 0
+                    case .low: budget = 1024
+                    case .medium: budget = 8192
+                    case .high: budget = 16384
+                    case .xhigh, .max: budget = 24576
+                    }
                     thinking["thinkingBudget"] = budget
                 }
             } else {
@@ -731,7 +803,7 @@ enum FlyMailAI {
                 case .off: level = "MINIMAL"
                 case .low: level = "LOW"
                 case .medium: level = "MEDIUM"
-                case .high, .max: level = "HIGH"
+                case .high, .xhigh, .max: level = "HIGH"
                 }
                 thinking["thinkingLevel"] = level
             }

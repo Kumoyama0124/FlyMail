@@ -50,7 +50,12 @@ struct AIChatView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .leading) {
-                mainContent
+                Color(uiColor: .systemBackground).ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    topBar
+                    mainContent
+                }
 
                 if showSidebar {
                     Color.black.opacity(0.22)
@@ -71,39 +76,7 @@ struct AIChatView: View {
                         .zIndex(11)
                 }
             }
-            .navigationTitle("AI")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        withAnimation(.spring(response: 0.34, dampingFraction: 0.84)) {
-                            showSidebar.toggle()
-                        }
-                    } label: {
-                        Image(systemName: "sidebar.left")
-                    }
-                    .accessibilityLabel("对话历史")
-                }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 18) {
-                        Button { showAISettings = true } label: {
-                            Image(systemName: "gearshape")
-                        }
-                        .accessibilityLabel("AI 设置")
-
-                        Button(action: newConversation) {
-                            Image(systemName: "plus")
-                        }
-                        .accessibilityLabel("新建对话")
-                    }
-                    .font(.system(size: 18, weight: .medium))
-                    .padding(.horizontal, 15)
-                    .padding(.vertical, 9)
-                    .background(.regularMaterial, in: Capsule())
-                    .glassEffect(.regular, in: Capsule())
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showAISettings) {
                 NavigationStack { AISettingsView() }
             }
@@ -140,63 +113,133 @@ struct AIChatView: View {
         }
     }
 
+    private var topBar: some View {
+        HStack(spacing: 12) {
+            Button {
+                withAnimation(.spring(response: 0.34, dampingFraction: 0.84)) {
+                    showSidebar.toggle()
+                }
+            } label: {
+                Image(systemName: "sidebar.left")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .frame(width: 42, height: 42)
+                    .contentShape(Circle())
+                    .background {
+                        Circle()
+                            .fill(.regularMaterial)
+                            .glassEffect(.regular, in: Circle())
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("对话历史")
+            .accessibilityIdentifier("ai.history")
+
+            Text("AI")
+                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .foregroundStyle(.primary)
+
+            Spacer(minLength: 8)
+
+            HStack(spacing: 4) {
+                Button {
+                    showAISettings = true
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 19, weight: .medium))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 42, height: 42)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("AI 设置")
+                .accessibilityIdentifier("ai.settings")
+
+                Button(action: newConversation) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 42, height: 42)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("新建对话")
+                .accessibilityIdentifier("ai.newConversation")
+            }
+            .padding(5)
+            .background {
+                Capsule()
+                    .fill(.regularMaterial)
+                    .glassEffect(.regular, in: Capsule())
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 7)
+        .padding(.bottom, 8)
+    }
+
     private var mainContent: some View {
-        ZStack(alignment: .bottom) {
-            VStack(spacing: 0) {
-                if messages.isEmpty {
-                    Spacer()
+        VStack(spacing: 0) {
+            if messages.isEmpty {
+                VStack(spacing: 10) {
+                    Spacer(minLength: 0)
                     ContentUnavailableView(
                         FlyMailAI.hasReadyModel ? "开始与 AI 对话" : "AI 尚未配置",
                         systemImage: "sparkles",
                         description: Text(
                             FlyMailAI.hasReadyModel
                             ? "可以直接提问，也可以添加图片或文件。邮件内容不会自动加入对话。"
-                            : "请先通过右上角齿轮，在 AI 设置中添加模型并保存 API Key。"
+                            : "请先点击右上角齿轮，在 AI 设置中添加模型并保存 API Key。"
                         )
                     )
                     if !FlyMailAI.hasReadyModel {
                         Button("打开 AI 设置") { showAISettings = true }
                             .buttonStyle(.borderedProminent)
-                            .padding(.top, 10)
+                            .padding(.top, 4)
                     }
-                    Spacer()
-                } else {
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVStack(alignment: .leading, spacing: 16) {
-                                ForEach(messages) { message in
-                                    messageRow(message)
-                                        .id(message.id)
-                                }
-
-                                if sending {
-                                    HStack(spacing: 8) {
-                                        ProgressView()
-                                        Text("AI 正在思考…").foregroundStyle(.secondary)
-                                    }
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                }
-
-                                Color.clear.frame(height: 180).id("chat-bottom")
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 16) {
+                            ForEach(messages) { message in
+                                messageRow(message)
+                                    .id(message.id)
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.top, 18)
+
+                            if sending {
+                                HStack(spacing: 8) {
+                                    ProgressView()
+                                    Text("AI 正在思考…").foregroundStyle(.secondary)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                            }
+
+                            Color.clear.frame(height: 80).id("chat-bottom")
                         }
-                        .scrollDismissesKeyboard(.interactively)
-                        .onChange(of: messages.count) { _, _ in
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                proxy.scrollTo("chat-bottom", anchor: .bottom)
-                            }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 18)
+                    }
+                    .scrollDismissesKeyboard(.interactively)
+                    .onChange(of: messages.count) { _, _ in
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            proxy.scrollTo("chat-bottom", anchor: .bottom)
                         }
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
             composer
                 .padding(.horizontal, 14)
-                .padding(.bottom, 86)
+                .padding(.top, 8)
+                // Dock 独立悬浮在 RootView 上；为它预留空间，但输入框自身始终参与纵向布局。
+                .padding(.bottom, 76)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(uiColor: .systemBackground))
     }
 
@@ -269,6 +312,7 @@ struct AIChatView: View {
                         .frame(width: 38, height: 38)
                         .background(Color.accentColor.opacity(0.10), in: Circle())
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel("添加图片或文件")
 
                 TextField("发送消息…", text: $input, axis: .vertical)
@@ -292,7 +336,7 @@ struct AIChatView: View {
                     }
                     .foregroundStyle(.white)
                     .frame(width: 38, height: 38)
-                    .background(Color.accentColor, in: Circle())
+                    .background(Color.blue, in: Circle())
                 }
                 .disabled(
                     (input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && draftAttachments.isEmpty) ||
@@ -329,14 +373,15 @@ struct AIChatView: View {
                     }
                     if let selectedProfile, FlyMailAI.canControlReasoning(selectedProfile) {
                         Section("思考等级") {
-                            ForEach(AIReasoningLevel.allCases) { level in
+                            ForEach(FlyMailAI.reasoningOptions(for: selectedProfile)) { level in
+                                let title = FlyMailAI.reasoningTitle(level, for: selectedProfile)
                                 Button {
                                     reasoningLevel = level
                                 } label: {
                                     if reasoningLevel == level {
-                                        Label(level.title, systemImage: "checkmark")
+                                        Label(title, systemImage: "checkmark")
                                     } else {
-                                        Text(level.title)
+                                        Text(title)
                                     }
                                 }
                             }
@@ -371,7 +416,7 @@ struct AIChatView: View {
                 if selectedProfile != nil {
                     Text("·")
                         .foregroundStyle(.tertiary)
-                    Text(reasoningLevel.title + "思考")
+                    Text(FlyMailAI.reasoningTitle(reasoningLevel, for: selectedProfile) + "思考")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -525,6 +570,7 @@ struct AIChatView: View {
         focused = false
         createConversation(persist: true)
         closeSidebar()
+        focused = true
     }
 
     private func openConversation(_ conversation: AIConversation) {
