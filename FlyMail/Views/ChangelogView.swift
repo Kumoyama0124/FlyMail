@@ -35,9 +35,8 @@ struct BrandIcon: View {
     }
 }
 
-/// 关于：每一项各占一行 —— GitHub 作者一行、GitHub 项目一行、小红书一行、Discord 一行，
-/// 版本放最后一个（点进去是产品信息页，不是更新日志）；作者和项目是链接，小红书和 Discord 的链接还没填，
-/// 先列出来占位，等填好链接再点开。
+/// 关于：每一项各占一行 —— GitHub 作者一行、GitHub 项目一行、Discord 一行，
+/// 版本放最后一个（点进去是产品信息页，不是更新日志）。
 /// 关于不再直接放在“我的”页上，而是放在“帮助与反馈”二级页里。
 struct AboutSectionView: View {
     var body: some View {
@@ -55,15 +54,6 @@ struct AboutSectionView: View {
                 HStack(spacing: 10) {
                     BrandIcon(domain: "github.com", fallback: "chevron.left.forwardslash.chevron.right", label: "GitHub 项目")
                     Text("FlyMail")
-                    Spacer()
-                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 2)
-            }
-            Link(destination: URL(string: "https://www.xiaohongshu.com")!) {
-                HStack(spacing: 10) {
-                    BrandIcon(domain: "xiaohongshu.com", fallback: "book.fill", label: "小红书")
-                    Text("小红书")
                     Spacer()
                     Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
                 }
@@ -89,11 +79,10 @@ struct AboutSectionView: View {
 }
 
 /// 版本产品信息页：只显示这一版的产品信息，不再是长长的更新日志历史。
-/// 内容按用户要求三项：1. APP 图标 2. 版本和新特性 3. 更新时间。
-/// APP 图标直接用 App 自己的图标：AppIconDisplay.imageset 里就是 AppIcon.png 原图（不是手画的），
-/// 运行时 UIImage(named: "AppIconDisplay") 能拿到；再兜底 AppIcon 和 CFBundleIcons 里的 loose 图标文件。
 /// 新特性是当前版的简述，新版发布时改这里，不要往后追加历史。
 struct ProductInfoView: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     /// App 自己的真实图标，优先 imageset 里的 1024 原图
     private var appIconImage: UIImage? {
         if let img = UIImage(named: "AppIconDisplay") { return img }
@@ -106,6 +95,14 @@ struct ProductInfoView: View {
             }
         }
         return nil
+    }
+
+    // 新特性卡片跟随深浅色，和首页卡片同一套配色逻辑
+    private var cardFill: Color {
+        colorScheme == .dark ? Color(uiColor: .tertiarySystemBackground) : Color(uiColor: .systemBackground)
+    }
+    private var cardStroke: Color {
+        colorScheme == .dark ? Color.white.opacity(0.14) : Color.black.opacity(0.06)
     }
 
     var body: some View {
@@ -130,20 +127,22 @@ struct ProductInfoView: View {
                     Text("版本 \(SettingsView.appVersion) (\(SettingsView.appBuild))")
                         .font(.headline)
                     // 3. 更新时间：当前版的发布时间，新版发布时改这个日期
-                    Text("更新时间 2026-11-01")
+                    Text("更新时间 2026-11-02")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
                 VStack(alignment: .leading, spacing: 10) {
                     Text("新特性").font(.headline)
                     ForEach([
-                        "应用正式更名为 FlyMail，原有账户与数据不受影响，无需重新添加邮箱",
-                        "全新液态玻璃界面：底部导航与编写按钮采用系统液态玻璃效果，视觉更通透；长按拖动导航时，当前栏目会以悬浮卡片跟随手指，松手即切换",
-                        "底部导航位置更贴近屏幕底部，四个栏目高度统一，切换动画更连贯",
-                        "收件箱新增筛选：全部、未读、已读、VIP；总收件箱中可隐藏不需要显示的邮箱",
-                        "头像支持 1:1 裁切：选择照片后可拖动、双指缩放，自行决定裁切区域，确认后保存",
-                        "备份与恢复页面排版优化，操作更清晰；清除头像缓存前会先弹出确认，避免误操作；帮助与反馈中的 Discord 入口已更新",
-                        "版本信息页现显示 App 图标，与桌面图标一致",
+                        "AI 助手全面升级：历史对话侧栏支持编辑批量管理，左滑即可归档/删除对话，已归档对话单独分区、可随时恢复",
+                        "聊天输入框重做：左侧加号可添加照片和文件，“更多”收进发送键旁的圆形菜单，里面可切换模型、调整思考等级；输入框为空时直接显示当前模型与思考等级",
+                        "各大模型思考等级对齐官方档位（OpenAI、Claude、Gemini、智谱、通义、Kimi、DeepSeek），默认关闭，可手动调整",
+                        "AI 长期记忆按对话隔离，自动压缩提炼、全程无感，可在 AI 设置中查看状态或清空",
+                        "AI 设置新增“回车键发送”开关（默认关闭）和“默认翻译模型”选择",
+                        "键盘弹出或展开历史侧栏时，底部导航自动让位：输入框顶格贴住键盘，侧栏内容不再被遮挡",
+                        "底部导航与输入框改为白色悬浮胶囊，选中项浅灰高亮，深浅色模式均已适配",
+                        "首页深色模式适配修复：卡片跟随系统深浅色，深色下清晰浮出不再隐形",
+                        "修复若干问题：AI 回复正确写回对应会话、助手回复消息框正常显示、顶部标题汉化等",
                     ], id: \.self) { f in
                         HStack(alignment: .top, spacing: 8) {
                             Text("•").foregroundStyle(.secondary)
@@ -153,8 +152,9 @@ struct ProductInfoView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding()
-                .background { RoundedRectangle(cornerRadius: 16).fill(.white).overlay { RoundedRectangle(cornerRadius: 16).stroke(.black.opacity(0.06), lineWidth: 0.5) } }
-                Spacer()
+                .background { RoundedRectangle(cornerRadius: 16).fill(cardFill).overlay { RoundedRectangle(cornerRadius: 16).stroke(cardStroke, lineWidth: 0.5) } }
+                // dock 是悬浮盖在内容上的，底部留出空当，最后一行才能完整滑出来不被遮住
+                Color.clear.frame(height: 110)
             }
             .padding(.horizontal, 20)
         }
