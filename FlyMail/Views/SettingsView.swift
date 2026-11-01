@@ -496,6 +496,22 @@ struct AISettingsView: View {
             } footer: {
                 Text("开启后，FlyMail 会自动压缩较早对话、提炼稳定偏好和重要信息；摘要保存在本机，并用于后续对话。压缩后请求只携带最近 8 条原始消息，可减少重复上下文和 Token 消耗。整理时调用当前首选模型，可能产生少量 API 用量。")
             }
+
+            Section {
+                NavigationLink { AutoReplySettingsView() } label: {
+                    HStack {
+                        Label("自动回复（实验）", systemImage: "arrowshape.turn.up.left.circle")
+                        Spacer()
+                        Text(AutoReplyStore.isEnabled ? "已开启" : "已关闭")
+                            .font(.caption)
+                            .foregroundStyle(AutoReplyStore.isEnabled ? Color.green : Color.secondary)
+                    }
+                }
+            } header: {
+                Text("自动回复")
+            } footer: {
+                Text("默认关闭。开启后由一个独立的“邮箱伙伴”人设自动回复新邮件，与上面的助手人设互不影响。")
+            }
         }
         .listStyle(.insetGrouped)
         .environment(\.editMode, .constant(isEditing ? .active : .inactive))

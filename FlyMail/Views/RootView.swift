@@ -74,12 +74,17 @@ struct RootView: View {
         .onChange(of: syncInterval) { _, _ in IdleManager.shared.restart(container: context.container) }
         .onChange(of: accounts.count) { _, _ in IdleManager.shared.start(container: context.container) }
         .onReceive(outboxTimer) { _ in
-            Task { await OutboxService(modelContainer: context.container).flushDue() }
+            Task {
+                await OutboxService(modelContainer: context.container).flushDue()
+                await AutoReplyService(modelContainer: context.container).processIfNeeded()
+            }
         }
         .onChange(of: phase) { _, p in
             if p == .active {
                 Task { await MailSyncService(modelContainer: context.container).syncAll() }
                 IdleManager.shared.start(container: context.container)
+                // 自动回复（默认关闭）：同步完扫一遍 24h 内的新邮件
+                Task { await AutoReplyService(modelContainer: context.container).processIfNeeded() }
             } else if p == .background {
                 IdleManager.shared.stop()
             }
