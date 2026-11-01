@@ -615,8 +615,12 @@ struct AIChatView: View {
 
     private func compactMemoryIfNeeded() {
         guard AIMemoryStore.isEnabled,
-              messages.count >= 20,
-              messages.count - AIMemoryStore.compactedCount >= 12 else { return }
+              let conversationID = currentConversationID,
+              messages.count >= 20 else { return }
+
+        let alreadyCompacted = AIMemoryStore.compactedConversationID == conversationID
+            ? AIMemoryStore.compactedCount : 0
+        guard messages.count - alreadyCompacted >= 12 else { return }
 
         let boundary = max(0, messages.count - 8)
         guard boundary > 0 else { return }
@@ -627,7 +631,7 @@ struct AIChatView: View {
             do {
                 let summary = try await FlyMailAI.compactMemory(messages: oldMessages)
                 await MainActor.run {
-                    AIMemoryStore.saveSummary(summary, compactedCount: count)
+                    AIMemoryStore.saveSummary(summary, compactedCount: count, conversationID: conversationID)
                 }
             } catch {
                 // 自动记忆失败不打断当前对话；下次达到阈值时会再次尝试。
