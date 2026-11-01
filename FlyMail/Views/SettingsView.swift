@@ -744,6 +744,16 @@ struct AISettingsView: View {
         AIModelStore.setPrimaryProfileID(primaryID)
     }
 
+    private func persistPersonaCard() {
+        AIPersonaCardStore.saveProfile(
+            gender: personaGender,
+            age: personaAge,
+            height: personaHeight,
+            weight: personaWeight,
+            zodiac: personaZodiac
+        )
+    }
+
     private func setFallback(_ id: String, enabled: Bool) {
         guard let index = profiles.firstIndex(where: { $0.id == id }) else { return }
         profiles[index].isFallback = enabled
