@@ -5,6 +5,7 @@ import PDFKit
 
 struct AIChatView: View {
     @Environment(AppState.self) private var app
+    @Environment(\.colorScheme) private var colorScheme
 
     var initialPrompt: String? = nil
 
@@ -55,7 +56,8 @@ struct AIChatView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .leading) {
-                Color(uiColor: .systemBackground).ignoresSafeArea()
+                // 浅灰底：和系统一样，让白色输入框、白色 dock 从背景里“浮”出来
+                Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
 
                 VStack(spacing: 0) {
                     topBar
@@ -168,12 +170,12 @@ struct AIChatView: View {
         .padding(.bottom, 8)
     }
 
-    /// 空状态标题：顶部不再显示助手名，把它放到这里的“AI”两个字的位置。
+    /// 空状态标题：助手名放在“AI”的位置，名字两侧留空格，醒目一点。
     /// 用户没改过名字时保持“开始与 AI 对话”。
     private var emptyStateTitle: String {
         if !FlyMailAI.hasReadyModel { return "AI 尚未配置" }
         let name = assistantName.trimmingCharacters(in: .whitespaces)
-        return (name.isEmpty || name == "FlyMail 助手") ? "开始与 AI 对话" : "开始与\(name)对话"
+        return (name.isEmpty || name == "FlyMail 助手") ? "开始与 AI 对话" : "开始与 \(name) 对话"
     }
 
     private var mainContent: some View {
@@ -238,7 +240,7 @@ struct AIChatView: View {
                 .padding(.bottom, 76)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(uiColor: .systemBackground))
+        .background(Color(uiColor: .systemGroupedBackground))
     }
 
     private func messageRow(_ message: AIChatMessage) -> some View {
@@ -365,14 +367,18 @@ struct AIChatView: View {
         }
         .padding(12)
         .background {
-            // 只用一层玻璃：叠一层 regularMaterial 会变成双重磨砂。
-            // 也不能在玻璃正下方加投影——玻璃会采样背后的内容，把阴影一起折射进来，整块发灰。
+            // 对齐参考样式：干净的白色胶囊 + 发丝描边 + 柔和投影，不再用 glassEffect。
             RoundedRectangle(cornerRadius: 25, style: .continuous)
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 25, style: .continuous))
+                .fill(
+                    colorScheme == .dark
+                    ? Color(uiColor: .secondarySystemBackground)
+                    : Color(uiColor: .systemBackground)
+                )
                 .overlay {
                     RoundedRectangle(cornerRadius: 25, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.09), lineWidth: 0.7)
+                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
                 }
+                .shadow(color: .black.opacity(0.08), radius: 16, y: 6)
         }
     }
 

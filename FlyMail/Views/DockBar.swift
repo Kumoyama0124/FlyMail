@@ -37,20 +37,30 @@ struct DockBar: View {
     private var highlightedIndex: Int { Int(progress.rounded()) }
 
     var body: some View {
-        GlassEffectContainer(spacing: 0) {
-            ZStack(alignment: .leading) {
-                // 条子本身
-                Color.clear
-                    .frame(maxWidth: .infinity)
-                    .frame(height: itemHeight + inset * 2)
-                    .glassEffect(.regular, in: Capsule())
-                slider
-                labels
-            }
-            .contentShape(Capsule())
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0 }
-            .gesture(dockGesture)
+        ZStack(alignment: .leading) {
+            // 条子本身：干净的白色胶囊 + 柔和投影 + 发丝描边，观感对齐系统标签栏；
+            // 不再用 glassEffect——玻璃叠玻璃/玻璃下面有阴影时会渲染出发灰发糊的色块。
+            Color.clear
+                .frame(maxWidth: .infinity)
+                .frame(height: itemHeight + inset * 2)
+                .background {
+                    Capsule()
+                        .fill(
+                            colorScheme == .dark
+                            ? Color(uiColor: .secondarySystemBackground)
+                            : Color(uiColor: .systemBackground)
+                        )
+                        .overlay {
+                            Capsule().strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+                        }
+                }
+                .shadow(color: .black.opacity(0.10), radius: 18, y: 6)
+            slider
+            labels
         }
+        .contentShape(Capsule())
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0 }
+        .gesture(dockGesture)
         .onChange(of: touching) { _, isTouching in
             // 手势被系统取消：松手逻辑没跑，这里把按住状态收回来
             if !isTouching, pressed { settle(to: nil) }
@@ -65,16 +75,11 @@ struct DockBar: View {
         let h = itemHeight + (pressed ? growH : 0)
         // 滑块中心 = 第 progress 栏的中心；放大时向两侧均匀长出，中心不动
         let x = inset + CGFloat(progress) * tabWidth - (w - tabWidth) / 2
-        // 选中高亮不再叠第二层玻璃：玻璃叠玻璃会互相折射，把整条 dock 洗成灰白。
-        // 改用跟随外观的半透明填充，观感对齐系统标签栏的选中底色。
+        // 选中高亮：浅灰填充，对齐系统标签栏选中项的底色。
         return Color.clear
             .frame(width: w, height: h)
             .background {
-                Capsule()
-                    .fill(colorScheme == .dark ? Color.white.opacity(0.14) : Color.white.opacity(0.60))
-            }
-            .overlay {
-                Capsule().strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+                Capsule().fill(Color.primary.opacity(0.07))
             }
             .offset(x: x)
             .allowsHitTesting(false)
