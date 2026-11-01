@@ -367,8 +367,8 @@ struct AISettingsView: View {
                                      ? "API Key 已保存"
                                      : "尚未设置 API Key")
                                     .font(.caption2)
-                                    .foregroundStyle(KeychainStore.get(AIModelStore.keychainKey(for: profile.id))?.isEmpty == false
-                                                     ? .secondary : .orange)
+                                    .foregroundColor(KeychainStore.get(AIModelStore.keychainKey(for: profile.id))?.isEmpty == false
+                                                     ? Color.secondary : Color.orange)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .contentShape(Rectangle())
