@@ -1,0 +1,22 @@
+name: Build
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    runs-on: xcode-27
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show Xcode version
+        run: xcodebuild -version
+      - run: brew install xcodegen && xcodegen generate
+      - name: Simulator build
+        run: |
+          set -o pipefail
+          xcodebuild -project FlyMail.xcodeproj -scheme FlyMail -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build | tee sim.log | grep -E "error:|BUILD" || { tail -50 sim.log; exit 1; }
+      - name: Archive unsigned
+        run: |
+          set -o pipefail
+          xcodebuild -project FlyMail.xcodeproj -scheme FlyMail -sdk iphoneos -configuration Release -destination 'generic/platform=iOS' -archivePath build/FlyMail.xcarchive CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" archive | tail -30
+          mkdir -p Payload && cp -R build/FlyMail.xcarchive/Products/Applications/FlyMail.app Payload/
+          zip -qry FlyMail-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with: { name: FlyMail-unsigned-ipa, path: FlyMail-unsigned.ipa }
