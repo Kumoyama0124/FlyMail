@@ -30,8 +30,6 @@ struct DockBar: View {
     @State private var pressed = false
     /// 系统打断手势（来电、滚动抢手势）时 onEnded 不一定会走，靠它兜底复位
     @GestureState private var touching = false
-    /// 玻璃形变命名空间：滑块切换栏目时液态拉伸滑过去（系统标签栏那种效果）
-    @Namespace private var glassNS
 
     private var tabWidth: CGFloat { max(1, (barWidth - inset * 2) / CGFloat(Self.tabs.count)) }
     private var selectedIndex: Int { Self.tabs.firstIndex(of: app.dockTab) ?? 0 }
@@ -39,33 +37,31 @@ struct DockBar: View {
     private var highlightedIndex: Int { Int(progress.rounded()) }
 
     var body: some View {
-        GlassEffectContainer(spacing: 0) {
-            ZStack(alignment: .leading) {
-                // 条子本身：干净的白色胶囊 + 柔和投影 + 发丝描边，观感对齐系统标签栏
-                Color.clear
-                    .frame(maxWidth: .infinity)
-                    .frame(height: itemHeight + inset * 2)
-                    .background {
-                        Capsule()
-                            .fill(
-                                colorScheme == .dark
-                                ? Color(uiColor: .secondarySystemBackground)
-                                : Color(uiColor: .systemBackground)
-                            )
-                            .overlay {
-                                Capsule().strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
-                            }
-                    }
-                    .shadow(color: .black.opacity(0.10), radius: 18, y: 6)
-                slider
-                labels
-            }
-            .contentShape(Capsule())
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0 }
-            .gesture(dockGesture)
+        ZStack(alignment: .leading) {
+            // 条子本身：干净的白色胶囊 + 柔和投影 + 发丝描边，观感对齐系统标签栏
+            Color.clear
+                .frame(maxWidth: .infinity)
+                .frame(height: itemHeight + inset * 2)
+                .background {
+                    Capsule()
+                        .fill(
+                            colorScheme == .dark
+                            ? Color(uiColor: .secondarySystemBackground)
+                            : Color(uiColor: .systemBackground)
+                        )
+                        .overlay {
+                            Capsule().strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+                        }
+                }
+                .shadow(color: .black.opacity(0.10), radius: 18, y: 6)
+            slider
+            labels
         }
-        // 选中项切换时玻璃滑块液态拉伸滑到新位置（系统标签栏那种形变）
-        .animation(.spring(response: 0.42, dampingFraction: 0.85), value: highlightedIndex)
+        .contentShape(Capsule())
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0 }
+        .gesture(dockGesture)
+        // 选中项切换时滑块带弹簧滑到新位置，按住时轻微鼓起
+        .animation(.spring(response: 0.38, dampingFraction: 0.8), value: highlightedIndex)
         .onChange(of: touching) { _, isTouching in
             // 手势被系统取消：松手逻辑没跑，这里把按住状态收回来
             if !isTouching, pressed { settle(to: nil) }
@@ -78,12 +74,19 @@ struct DockBar: View {
     private var slider: some View {
         let w = tabWidth + (pressed ? growW : 0)
         let h = itemHeight + (pressed ? growH : 0)
-        // 滑块锚定在选中栏；切换时通过 glassEffectID 做液态形变（拉伸滑过去），不再逐帧跟手平移
+        // 滑块中心 = 第 progress 栏的中心；放大时向两侧均匀长出，中心不动
         let x = inset + CGFloat(highlightedIndex) * tabWidth - (w - tabWidth) / 2
+        // 选中高亮：清晰的浅灰胶囊，边缘利落、和 dock 融为一体，
+        // 不用 glassEffect——玻璃落在白色实底条上会渲染成一团模糊的灰雾。
         return Color.clear
             .frame(width: w, height: h)
-            .glassEffect(.regular.interactive(), in: Capsule())
-            .glassEffectID(highlightedIndex, in: glassNS)
+            .background {
+                Capsule()
+                    .fill(Color.primary.opacity(0.07))
+                    .overlay {
+                        Capsule().strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5)
+                    }
+            }
             .offset(x: x)
             .allowsHitTesting(false)
     }

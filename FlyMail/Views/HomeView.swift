@@ -23,6 +23,15 @@ struct HomeView: View {
         allMessages.filter { Calendar.current.isDateInToday($0.date) && $0.folder?.role != "sent" }.count
     }
 
+    // 卡片配色：浅色=白卡+黑描边；深色=抬高的深灰卡+白描边，
+    // 否则深色下卡片和纯黑背景融为一体，看不出是个功能模块。
+    private var cardFill: Color {
+        colorScheme == .dark ? Color(uiColor: .tertiarySystemBackground) : Color(uiColor: .systemBackground)
+    }
+    private var cardStroke: Color {
+        colorScheme == .dark ? Color.white.opacity(0.14) : Color.black.opacity(0.06)
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -49,7 +58,7 @@ struct HomeView: View {
                         }
                         Spacer()
                     }
-                    .padding().background { RoundedRectangle(cornerRadius: 20).fill(Color(uiColor: .systemBackground)).overlay { RoundedRectangle(cornerRadius: 20).stroke(Color.primary.opacity(0.06), lineWidth: 0.5) } }.shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.06), radius: 10, y: 2)
+                    .padding().background { RoundedRectangle(cornerRadius: 20).fill(cardFill).overlay { RoundedRectangle(cornerRadius: 20).stroke(cardStroke, lineWidth: 0.5) } }.shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.06), radius: 10, y: 2)
 
                     // 统计
                     HStack(spacing: 12) {
@@ -118,7 +127,7 @@ struct HomeView: View {
             Text(label).font(.caption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 12)
-        .background { RoundedRectangle(cornerRadius: 16).fill(Color(uiColor: .systemBackground)).overlay { RoundedRectangle(cornerRadius: 16).stroke(Color.primary.opacity(0.06), lineWidth: 0.5) } }.shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.08), radius: 8, y: 2)
+        .background { RoundedRectangle(cornerRadius: 16).fill(cardFill).overlay { RoundedRectangle(cornerRadius: 16).stroke(cardStroke, lineWidth: 0.5) } }.shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.08), radius: 8, y: 2)
     }
 
     private func shortcut(_ title: String, _ icon: String, _ mailbox: AppState.Mailbox) -> some View {
@@ -137,7 +146,7 @@ struct HomeView: View {
             }.padding()
         }
         .buttonStyle(.plain)
-        .background { RoundedRectangle(cornerRadius: 16).fill(Color(uiColor: .systemBackground)).overlay { RoundedRectangle(cornerRadius: 16).stroke(Color.primary.opacity(0.06), lineWidth: 0.5) } }.shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.08), radius: 8, y: 2)
+        .background { RoundedRectangle(cornerRadius: 16).fill(cardFill).overlay { RoundedRectangle(cornerRadius: 16).stroke(cardStroke, lineWidth: 0.5) } }.shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.08), radius: 8, y: 2)
     }
 
     private func openAccount(_ a: Account) {
