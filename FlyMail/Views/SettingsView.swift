@@ -353,6 +353,7 @@ struct AISettingsView: View {
     @State private var personaHeight = AIPersonaCardStore.height
     @State private var personaWeight = AIPersonaCardStore.weight
     @State private var personaZodiac = AIPersonaCardStore.zodiac
+    @State private var personaMBTI = AIPersonaCardStore.mbti
     @State private var personaPickerOpen = false
     @State private var personaPickerItem: PhotosPickerItem?
     @State private var personaCropImage: UIImage?
@@ -436,7 +437,6 @@ struct AISettingsView: View {
             }
 
             Section {
-                TextField("助手名称", text: $assistantName)
                 Picker("回复语言", selection: $responseLanguage) {
                     Text("跟随提问语言").tag("auto")
                     Text("简体中文").tag("zh-Hans")
@@ -468,6 +468,7 @@ struct AISettingsView: View {
             }
 
             Section {
+                TextField("助手名称（用于聊天显示）", text: $assistantName)
                 Button { personaPickerOpen = true } label: {
                     HStack(spacing: 12) {
                         personaAvatarView
@@ -489,7 +490,24 @@ struct AISettingsView: View {
                     Text("女").tag("female")
                     Text("其他").tag("other")
                 }
-                Stepper("年龄：\(personaAge == 0 ? "未设置" : "\(personaAge) 岁")", value: $personaAge, in: 0...120)
+                HStack {
+                    Text("年龄")
+                    Spacer()
+                    TextField("未设置", value: $personaAge, format: .number)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 70)
+                    Text("岁").foregroundStyle(.secondary)
+                }
+                HStack {
+                    Text("MBTI")
+                    Spacer()
+                    TextField("未设置", text: $personaMBTI)
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled()
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 90)
+                }
                 HStack {
                     Text("身高")
                     Spacer()
@@ -646,6 +664,7 @@ struct AISettingsView: View {
         .onChange(of: personaHeight) { _, _ in persistPersonaCard() }
         .onChange(of: personaWeight) { _, _ in persistPersonaCard() }
         .onChange(of: personaZodiac) { _, _ in persistPersonaCard() }
+        .onChange(of: personaMBTI) { _, _ in persistPersonaCard() }
         .onChange(of: primaryID) { _, newValue in
             AIModelStore.setPrimaryProfileID(newValue)
         }
@@ -750,7 +769,8 @@ struct AISettingsView: View {
             age: personaAge,
             height: personaHeight,
             weight: personaWeight,
-            zodiac: personaZodiac
+            zodiac: personaZodiac,
+            mbti: personaMBTI
         )
     }
 

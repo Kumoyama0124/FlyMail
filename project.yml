@@ -8,6 +8,8 @@ settings:
     SWIFT_VERSION: "5.9"
     DEVELOPMENT_TEAM: ""          # 在 Xcode 中设置你的 Team
     TARGETED_DEVICE_FAMILY: "1,2"
+    MARKETING_VERSION: "1.1"      # 对外版本号（关于页显示的 V1.1）
+    CURRENT_PROJECT_VERSION: 2    # 构建号，每次发版 +1
 targets:
   FlyMail:
     type: application

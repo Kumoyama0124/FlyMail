@@ -93,6 +93,15 @@ struct AIChatView: View {
             .sheet(isPresented: $showAISettings) {
                 NavigationStack { AISettingsView() }
             }
+            .onChange(of: showAISettings) { _, open in
+                // 设置里刚换过头像/昵称/助手名：关掉设置立即刷新聊天头像，不用退出 AI 页
+                if !open {
+                    let myURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                        .appendingPathComponent("MyAvatar.png")
+                    myChatAvatar = UIImage(contentsOfFile: myURL.path)
+                    aiChatAvatar = AIPersonaCardStore.loadAvatar()
+                }
+            }
             .photosPicker(
                 isPresented: $showPhotoPicker,
                 selection: $selectedPhotos,

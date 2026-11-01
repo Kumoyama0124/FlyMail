@@ -444,6 +444,7 @@ enum AIPersonaCardStore {
     static let ageKey = "ai.persona.age"
     static let heightKey = "ai.persona.height"
     static let weightKey = "ai.persona.weight"
+    static let mbtiKey = "ai.persona.mbti"
     static let zodiacKey = "ai.persona.zodiac"
     static let showAvatarKey = "ai.chat.showAvatar"
     static let showNameKey = "ai.chat.showName"
@@ -475,6 +476,7 @@ enum AIPersonaCardStore {
     static var age: Int { UserDefaults.standard.integer(forKey: ageKey) }
     static var height: Int { UserDefaults.standard.integer(forKey: heightKey) }
     static var weight: Int { UserDefaults.standard.integer(forKey: weightKey) }
+    static var mbti: String { UserDefaults.standard.string(forKey: mbtiKey) ?? "" }
     static var zodiac: String { UserDefaults.standard.string(forKey: zodiacKey) ?? "未设置" }
 
     static var genderTitle: String {
@@ -487,16 +489,17 @@ enum AIPersonaCardStore {
     }
 
     /// 保存资料（高度/体重/年龄为 0 表示未填写）
-    static func saveProfile(gender: String, age: Int, height: Int, weight: Int, zodiac: String) {
+    static func saveProfile(gender: String, age: Int, height: Int, weight: Int, mbti: String, zodiac: String) {
         UserDefaults.standard.set(gender, forKey: genderKey)
         UserDefaults.standard.set(age, forKey: ageKey)
         UserDefaults.standard.set(height, forKey: heightKey)
         UserDefaults.standard.set(weight, forKey: weightKey)
+        UserDefaults.standard.set(mbti.trimmingCharacters(in: .whitespacesAndNewlines).uppercased(), forKey: mbtiKey)
         UserDefaults.standard.set(zodiac, forKey: zodiacKey)
     }
 
     static var hasAnyProfileInfo: Bool {
-        !genderTitle.isEmpty || age > 0 || height > 0 || weight > 0 || (zodiac != "未设置" && !zodiac.isEmpty)
+        !genderTitle.isEmpty || age > 0 || height > 0 || weight > 0 || !mbti.isEmpty || (zodiac != "未设置" && !zodiac.isEmpty)
     }
 
     /// 注入系统提示词的一行人设；资料卡没填时返回 nil
@@ -507,6 +510,7 @@ enum AIPersonaCardStore {
         if age > 0 { items.append("\(age) 岁") }
         if height > 0 { items.append("身高 \(height) cm") }
         if weight > 0 { items.append("体重 \(weight) kg") }
+        if !mbti.isEmpty { items.append("MBTI \(mbti)") }
         if zodiac != "未设置", !zodiac.isEmpty { items.append("星座 \(zodiac)") }
         guard !items.isEmpty else { return nil }
         return "你的资料卡设定：" + items.joined(separator: "；") + "。聊天时保持这个人设。"

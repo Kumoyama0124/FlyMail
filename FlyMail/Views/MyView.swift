@@ -179,16 +179,19 @@ struct AvatarCropView: View {
                 let size = min(geo.size.width, geo.size.height) * 0.86
                 let x0 = (geo.size.width - size) / 2
                 let y0 = (geo.size.height - size) / 2 - 16
+                // 关键：图片按"填满方框"的原始比例完整渲染（base 尺寸），不预先裁成方形——
+                // 长方形图片溢出方框的部分被暗罩盖住，拖动就是真的在选区域，方框内也不会有黑块
+                let base = baseSize(for: size)
                 ZStack {
                     Color.black.ignoresSafeArea()
-                    // 图片不裁切：超出方框的部分用暗罩盖住，暗示"还能拖出来"
                     Image(uiImage: image)
                         .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: size, height: size)
-                        .clipped()
+                        .scaledToFill()
+                        .frame(width: base.width, height: base.height)
                         .scaleEffect(scale)
                         .offset(offset)
+                        .position(x: geo.size.width / 2, y: y0 + size / 2)
+                        .contentShape(Rectangle())
                         .gesture(
                             DragGesture()
                                 .onChanged { v in
