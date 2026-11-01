@@ -366,7 +366,7 @@ struct AISettingsView: View {
             } footer: {
                 Text("选择服务商后自动填写 API 地址和推荐模型。模型名称可按账号实际开通情况修改。")
             }
-            Section("API Key") {
+            Section {
                 SecureField("粘贴 API Key", text: $apiKey)
                 Button("保存配置") {
                     KeychainStore.set(apiKey.trimmingCharacters(in: .whitespacesAndNewlines), for: "ai.apiKey")
@@ -378,6 +378,8 @@ struct AISettingsView: View {
                     testError = false
                 }
                 .disabled(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            } header: {
+                Text("API Key")
             } footer: {
                 Text("API Key 保存在本机钥匙串，仅在你主动使用 AI 时发送至所选服务商。")
             }
