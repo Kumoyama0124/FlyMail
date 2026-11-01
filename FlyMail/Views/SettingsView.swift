@@ -351,68 +351,7 @@ struct AISettingsView: View {
                 }
 
                 ForEach(profiles) { profile in
-                    HStack(spacing: 10) {
-                        Button {
-                            editorRequest = AIModelEditorRequest(profile: profile, isNew: false)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(profile.name)
-                                    .font(.body.weight(.semibold))
-                                    .foregroundStyle(.primary)
-                                Text("\(profile.providerRaw) · \(profile.model)")
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                Text(KeychainStore.get(AIModelStore.keychainKey(for: profile.id))?.isEmpty == false
-                                     ? "API Key 已保存"
-                                     : "尚未设置 API Key")
-                                    .font(.caption2)
-                                    .foregroundColor(KeychainStore.get(AIModelStore.keychainKey(for: profile.id))?.isEmpty == false
-                                                     ? Color.secondary : Color.orange)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-
-                        VStack(alignment: .trailing, spacing: 5) {
-                            if profile.id == primaryID {
-                                Text("首选")
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.tint)
-                            }
-                            if profile.isFallback && profile.id != primaryID {
-                                Text("备用")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        Menu {
-                            if profile.id != primaryID {
-                                Button("设为首选", systemImage: "star") {
-                                    primaryID = profile.id
-                                }
-                            }
-                            Button(profile.isFallback ? "取消备用" : "设为备用",
-                                   systemImage: profile.isFallback ? "minus.circle" : "arrow.uturn.backward") {
-                                setFallback(profile.id, enabled: !profile.isFallback)
-                            }
-                            Button("编辑", systemImage: "pencil") {
-                                editorRequest = AIModelEditorRequest(profile: profile, isNew: false)
-                            }
-                            Button("删除", systemImage: "trash", role: .destructive) {
-                                pendingDeleteID = profile.id
-                                confirmDelete = true
-                            }
-                        } label: {
-                            Image(systemName: "ellipsis.circle")
-                                .font(.title3)
-                                .foregroundStyle(.secondary)
-                                .padding(.leading, 4)
-                        }
-                    }
-                    .padding(.vertical, 3)
+                    modelRow(profile)
                 }
                 .onMove { source, destination in
                     profiles.move(fromOffsets: source, toOffset: destination)
@@ -533,6 +472,62 @@ struct AISettingsView: View {
         }
     }
 
+    @ViewBuilder
+    private func modelRow(_ profile: AIModelProfile) -> some View {
+        let configured = !(KeychainStore.get(AIModelStore.keychainKey(for: profile.id)) ?? "").isEmpty
+        HStack(spacing: 10) {
+            Button {
+                editorRequest = AIModelEditorRequest(profile: profile, isNew: false)
+            } label: {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(profile.name).font(.body.weight(.semibold)).foregroundColor(.primary)
+                    Text("\(profile.providerRaw) · \(profile.model)")
+                        .font(.footnote).foregroundColor(.secondary).lineLimit(1)
+                    Text(configured ? "API Key 已保存" : "尚未设置 API Key")
+                        .font(.caption2)
+                        .foregroundColor(configured ? Color.secondary : Color.orange)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .trailing, spacing: 5) {
+                if profile.id == primaryID {
+                    Text("首选").font(.caption2.weight(.semibold)).foregroundColor(.accentColor)
+                }
+                if profile.isFallback && profile.id != primaryID {
+                    Text("备用").font(.caption2).foregroundColor(.secondary)
+                }
+            }
+
+            Menu {
+                if profile.id != primaryID {
+                    Button("设为首选", systemImage: "star") { primaryID = profile.id }
+                }
+                Button(
+                    profile.isFallback ? "取消备用" : "设为备用",
+                    systemImage: profile.isFallback ? "minus.circle" : "arrow.uturn.backward"
+                ) {
+                    setFallback(profile.id, enabled: !profile.isFallback)
+                }
+                Button("编辑", systemImage: "pencil") {
+                    editorRequest = AIModelEditorRequest(profile: profile, isNew: false)
+                }
+                Button("删除", systemImage: "trash", role: .destructive) {
+                    pendingDeleteID = profile.id
+                    confirmDelete = true
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.title3)
+                    .foregroundColor(.secondary)
+                    .padding(.leading, 4)
+            }
+        }
+        .padding(.vertical, 3)
+    }
+
     private func reload() {
         profiles = AIModelStore.loadProfiles()
         let savedPrimary = AIModelStore.primaryProfileID
@@ -599,7 +594,7 @@ private struct AIModelEditorView: View {
 
     var body: some View {
         Form {
-            Section("基本信息") {
+            Section {
                 TextField("配置名称", text: $draft.name)
                 Picker("服务商", selection: $draft.providerRaw) {
                     ForEach(AIProvider.allCases) { provider in
@@ -613,6 +608,8 @@ private struct AIModelEditorView: View {
                 TextField("模型名称", text: $draft.model)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+            } header: {
+                Text("基本信息")
             } footer: {
                 Text("请填写服务商提供的兼容 API 根地址和模型 ID。Claude 使用 Anthropic Messages API，其余服务商使用 Chat Completions API。")
             }
