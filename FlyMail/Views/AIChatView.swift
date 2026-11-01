@@ -423,13 +423,14 @@ struct AIChatView: View {
         }
         .padding(12)
         .background {
+            // 只用一层玻璃：叠一层 regularMaterial 会变成双重磨砂，
+            // 浅色发糊、深色发白发灰。玻璃外只加一圈 0.7pt 发丝描边。
             RoundedRectangle(cornerRadius: 25, style: .continuous)
-                .fill(.regularMaterial)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 25, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 25, style: .continuous)
                         .strokeBorder(Color.primary.opacity(0.09), lineWidth: 0.7)
                 }
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 25, style: .continuous))
         }
         .shadow(color: .black.opacity(0.07), radius: 12, y: 4)
     }
