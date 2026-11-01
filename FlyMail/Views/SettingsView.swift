@@ -145,6 +145,7 @@ struct SyncSettingsView: View {
 
 struct VIPListView: View {
     @AppStorage(Prefs.vipList) private var vipRaw = ""
+    @Environment(\.editMode) private var editMode
     var body: some View {
         let list = VIPStore.list
         List {
@@ -153,7 +154,11 @@ struct VIPListView: View {
                 .onDelete { idx in idx.map { list[$0] }.forEach(VIPStore.remove) }
         }
         .navigationTitle("VIP")
-        .toolbar { EditButton() }
+        .toolbar {
+            Button(editMode == .active ? "完成" : "编辑") {
+                editMode?.wrappedValue = editMode == .active ? .inactive : .active
+            }
+        }
     }
 }
 

@@ -18,7 +18,6 @@ struct AIChatView: View {
     @State private var searchText = ""
     @State private var showSidebar = false
     @State private var showAISettings = false
-    @State private var showAttachOptions = false
     @State private var showPhotoPicker = false
     @State private var showFileImporter = false
     @State private var showMore = false
@@ -80,11 +79,6 @@ struct AIChatView: View {
             .sheet(isPresented: $showAISettings) {
                 NavigationStack { AISettingsView() }
             }
-            .confirmationDialog("添加内容", isPresented: $showAttachOptions, titleVisibility: .visible) {
-                Button("选择照片") { showPhotoPicker = true }
-                Button("添加文件") { showFileImporter = true }
-                Button("取消", role: .cancel) { }
-            }
             .photosPicker(
                 isPresented: $showPhotoPicker,
                 selection: $selectedPhotos,
@@ -125,11 +119,6 @@ struct AIChatView: View {
                     .foregroundStyle(.primary)
                     .frame(width: 42, height: 42)
                     .contentShape(Circle())
-                    .background {
-                        Circle()
-                            .fill(.regularMaterial)
-                            .glassEffect(.regular, in: Circle())
-                    }
             }
             .buttonStyle(.plain)
             .accessibilityLabel("对话历史")
@@ -141,37 +130,29 @@ struct AIChatView: View {
 
             Spacer(minLength: 8)
 
-            HStack(spacing: 4) {
-                Button {
-                    showAISettings = true
-                } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 19, weight: .medium))
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: 42, height: 42)
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .background {
-                    Circle().fill(.regularMaterial).glassEffect(.regular, in: Circle())
-                }
-                .accessibilityLabel("AI 设置")
-                .accessibilityIdentifier("ai.settings")
-
-                Button(action: newConversation) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: 42, height: 42)
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .background {
-                    Circle().fill(.regularMaterial).glassEffect(.regular, in: Circle())
-                }
-                .accessibilityLabel("新建对话")
-                .accessibilityIdentifier("ai.newConversation")
+            Button {
+                showAISettings = true
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 19, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 42, height: 42)
+                    .contentShape(Circle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("AI 设置")
+            .accessibilityIdentifier("ai.settings")
+
+            Button(action: newConversation) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 27))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 42, height: 42)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("新建对话")
+            .accessibilityIdentifier("ai.newConversation")
         }
         .padding(.horizontal, 20)
         .padding(.top, 7)
@@ -305,14 +286,22 @@ struct AIChatView: View {
             }
 
             HStack(alignment: .bottom, spacing: 9) {
-                Button { showAttachOptions = true } label: {
+                Menu {
+                    Section {
+                        Button { showPhotoPicker = true } label: {
+                            Label("选择照片", systemImage: "photo")
+                        }
+                        Button { showFileImporter = true } label: {
+                            Label("添加文件", systemImage: "doc")
+                        }
+                    }
+                } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 19, weight: .semibold))
                         .foregroundStyle(Color.accentColor)
                         .frame(width: 38, height: 38)
                         .background(Color.accentColor.opacity(0.10), in: Circle())
                 }
-                .buttonStyle(.plain)
                 .accessibilityLabel("添加图片或文件")
 
                 TextField("发送消息…", text: $input, axis: .vertical)
@@ -404,8 +393,7 @@ struct AIChatView: View {
                     .foregroundStyle(.primary)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(.thinMaterial, in: Capsule())
-                    .glassEffect(.regular, in: Capsule())
+                    .background(Color.secondary.opacity(0.12), in: Capsule())
                 }
 
                 Text(selectedProfileTitle)
@@ -568,6 +556,12 @@ struct AIChatView: View {
 
     private func newConversation() {
         focused = false
+        // 当前已经在一条空对话里时不重复创建，只收起侧栏，避免“点了没反应”。
+        if messages.isEmpty, input.isEmpty, draftAttachments.isEmpty {
+            closeSidebar()
+            focused = true
+            return
+        }
         createConversation(persist: true)
         closeSidebar()
         focused = true
