@@ -269,23 +269,15 @@ struct AIChatView: View {
 
     private func messageRow(_ message: AIChatMessage) -> some View {
         let isUser = message.role == "user"
-        return HStack(alignment: .top, spacing: 0) {
+        return HStack(alignment: .top, spacing: 8) {
             if isUser { Spacer(minLength: 20) }
 
-            VStack(alignment: isUser ? .trailing : .leading, spacing: 5) {
-                // 头像和名称在同一行（头像贴屏幕外侧），气泡在下面占整行——微信/QQ 的排版
-                if showAvatar || showName {
-                    HStack(spacing: 7) {
-                        if !isUser {
-                            if showAvatar { chatAvatar(isUser: false) }
-                            if showName { chatNameLabel(isUser: false) }
-                        } else {
-                            if showName { chatNameLabel(isUser: true) }
-                            if showAvatar { chatAvatar(isUser: true) }
-                        }
-                    }
-                    .padding(.horizontal, 4)
-                }
+            // QQ 群聊式排版：头像独占左侧一列（顶部对齐），
+            // 昵称是头像右侧第一行，气泡紧贴在昵称下方（与昵称左/右对齐）
+            if showAvatar { chatAvatar(isUser: isUser) }
+
+            VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
+                if showName { chatNameLabel(isUser: isUser) }
                 bubble(for: message)
             }
 
