@@ -431,6 +431,10 @@ enum FlyMailAI {
         }
     }
 
+    static func canControlReasoning(_ profile: AIModelProfile) -> Bool {
+        !reasoningOptions(for: profile).isEmpty
+    }
+
     static func reasoningTitle(_ level: AIReasoningLevel, for profile: AIModelProfile) -> String {
         let model = profile.model.lowercased()
         if level == .off {
