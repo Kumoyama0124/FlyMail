@@ -397,8 +397,17 @@ enum FlyMailAI {
                     model.contains("opus-5") || model.contains("sonnet-5") || model.contains("haiku-5") else { return [] }
             return [.off, .low, .medium, .high, .max]
         case .gemini:
-            guard model.contains("2.5") || model.contains("gemini-3") || model.contains("gemini-4") else { return [] }
-            return [.off, .low, .medium, .high]
+            if model.contains("2.5") { return [.off, .low, .medium, .high] }
+            if model.contains("3.1-flash-lite-image") { return [.off, .high] }
+            if model.contains("3-pro-preview") { return [.off, .low, .high] }
+            if model.contains("3.1-pro") || model.contains("3.8") || model.contains("3.7") ||
+                model.contains("4-argon") {
+                return [.off, .low, .medium, .high]
+            }
+            if model.contains("3.6") || model.contains("3.5") || model.contains("3-flash") {
+                return [.off, .low, .medium, .high]
+            }
+            return []
         case .zhipu:
             if model.contains("glm-5.3") { return [.off, .low, .high, .max] }
             if model.contains("glm-5.2") { return [.off, .high, .max] }
@@ -408,7 +417,9 @@ enum FlyMailAI {
             if model.contains("qwen3") { return [.off, .low, .medium, .high] }
             return []
         case .kimi:
-            if model.contains("k2.6") || model.contains("k2.7") { return [.off, .high] }
+            if model.contains("k2.6") { return [.off, .high] }
+            if model.contains("kimi-k3") || model == "k3" { return [.off, .low, .high, .max] }
+            // K2.7 Code is thinking-only and does not expose a documented off switch here.
             return []
         case .deepSeek:
             if model.contains("deepseek-v4") || model.contains("deepseek-v3.2") {
@@ -420,21 +431,20 @@ enum FlyMailAI {
         }
     }
 
-    static func canControlReasoning(_ profile: AIModelProfile) -> Bool {
-        !reasoningOptions(for: profile).isEmpty
-    }
-
     static func reasoningTitle(_ level: AIReasoningLevel, for profile: AIModelProfile) -> String {
         let model = profile.model.lowercased()
-        if profile.provider == .kimi && level != .off { return "开启" }
         if level == .off {
-            let cannotDisable =
+            let requiresMinimum =
                 (profile.provider == .zhipu && model.contains("glm-5.3")) ||
                 (profile.provider == .claude && (model.contains("opus-5") || model.contains("sonnet-5") || model.contains("haiku-5"))) ||
-                (profile.provider == .gemini && (!model.contains("2.5") || model.contains("2.5-pro"))) ||
-                (profile.provider == .openAI && (model.contains("gpt-6-astra") || model.contains("gpt-6.1-sol")))
-            return cannotDisable ? "关闭（最低档）" : "关闭"
+                (profile.provider == .gemini && !model.contains("2.5")) ||
+                (profile.provider == .openAI && (model.contains("gpt-6-astra") || model.contains("gpt-6.1-sol"))) ||
+                (profile.provider == .kimi && (model.contains("kimi-k3") || model == "k3"))
+            if profile.provider == .kimi && model.contains("k2.6") { return "关闭" }
+            if profile.provider == .gemini && model.contains("2.5-pro") { return "关闭（最低档）" }
+            return requiresMinimum ? "关闭（最低档）" : "关闭"
         }
+        if profile.provider == .kimi && model.contains("k2.6") { return "开启" }
         return level.title
     }
 
@@ -685,8 +695,12 @@ enum FlyMailAI {
                 }
             }
         case .kimi:
-            // Kimi 当前在此兼容接口中暴露的是思考开关，不伪装成多档强度。
-            body["thinking"] = ["type": level == .off ? "disabled" : "enabled", "keep": "all"]
+            if model.contains("k2.6") {
+                body["thinking"] = ["type": level == .off ? "disabled" : "enabled", "keep": "all"]
+            } else if model.contains("kimi-k3") || model == "k3" {
+                // Kimi K3 始终思考；官方只接受 low / high / max。
+                body["reasoning_effort"] = level == .off ? "low" : level.rawValue
+            }
         case .claude, .gemini, .custom:
             break
         }
@@ -799,8 +813,12 @@ enum FlyMailAI {
                 }
             } else {
                 let level: String
+                let modelSupportsMinimal =
+                    model.contains("3.6") || model.contains("3.5-flash-lite") ||
+                    model.contains("3.5-flash") || model.contains("3-flash") ||
+                    model.contains("3.1-flash-lite-image")
                 switch reasoning {
-                case .off: level = "MINIMAL"
+                case .off: level = modelSupportsMinimal ? "MINIMAL" : "LOW"
                 case .low: level = "LOW"
                 case .medium: level = "MEDIUM"
                 case .high, .xhigh, .max: level = "HIGH"
