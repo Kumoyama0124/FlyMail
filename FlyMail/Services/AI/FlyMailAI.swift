@@ -172,6 +172,32 @@ struct AIModelProfile: Identifiable, Codable, Hashable {
         self.reasoningDefaultRaw = reasoningDefaultRaw
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case id, name, providerRaw, baseURL, model, isFallback, reasoningDefaultRaw
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        name = try values.decode(String.self, forKey: .name)
+        providerRaw = try values.decode(String.self, forKey: .providerRaw)
+        baseURL = try values.decode(String.self, forKey: .baseURL)
+        model = try values.decode(String.self, forKey: .model)
+        isFallback = try values.decodeIfPresent(Bool.self, forKey: .isFallback) ?? false
+        reasoningDefaultRaw = try values.decodeIfPresent(String.self, forKey: .reasoningDefaultRaw) ?? AIReasoningLevel.off.rawValue
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(id, forKey: .id)
+        try values.encode(name, forKey: .name)
+        try values.encode(providerRaw, forKey: .providerRaw)
+        try values.encode(baseURL, forKey: .baseURL)
+        try values.encode(model, forKey: .model)
+        try values.encode(isFallback, forKey: .isFallback)
+        try values.encode(reasoningDefaultRaw, forKey: .reasoningDefaultRaw)
+    }
+
     static func makeDefault() -> AIModelProfile {
         let provider = AIProvider.openAI
         return AIModelProfile(
@@ -258,6 +284,7 @@ enum AIMemoryStore {
     static let enabledKey = "ai.memory.enabled"
     private static let summaryKey = "ai.memory.summary"
     private static let compactedCountKey = "ai.memory.compactedCount"
+    private static let compactedConversationKey = "ai.memory.compactedConversationID"
 
     static var isEnabled: Bool {
         get {
@@ -275,14 +302,20 @@ enum AIMemoryStore {
         UserDefaults.standard.integer(forKey: compactedCountKey)
     }
 
-    static func saveSummary(_ value: String, compactedCount: Int) {
+    static var compactedConversationID: String {
+        UserDefaults.standard.string(forKey: compactedConversationKey) ?? ""
+    }
+
+    static func saveSummary(_ value: String, compactedCount: Int, conversationID: String) {
         UserDefaults.standard.set(value, forKey: summaryKey)
         UserDefaults.standard.set(compactedCount, forKey: compactedCountKey)
+        UserDefaults.standard.set(conversationID, forKey: compactedConversationKey)
     }
 
     static func clear() {
         UserDefaults.standard.removeObject(forKey: summaryKey)
         UserDefaults.standard.removeObject(forKey: compactedCountKey)
+        UserDefaults.standard.removeObject(forKey: compactedConversationKey)
     }
 }
 
@@ -521,8 +554,7 @@ enum FlyMailAI {
         let url = try endpoint(baseURL: profile.baseURL, path: "/chat/completions")
         var body: [String: Any] = [
             "model": profile.model,
-            "messages": messages.map { ["role": $0.role, "content": openAIContent($0)] },
-            "temperature": 0.7
+            "messages": messages.map { ["role": $0.role, "content": openAIContent($0)] }
         ]
         addReasoningParameters(to: &body, profile: profile, level: reasoning)
 
@@ -594,7 +626,11 @@ enum FlyMailAI {
                 }
             }
         case .kimi:
-            body["thinking"] = ["type": level == .off ? "disabled" : "enabled", "keep": "all"]
+            if model.contains("k2.6") {
+                body["thinking"] = ["type": level == .off ? "disabled" : "enabled", "keep": "all"]
+            } else {
+                body["thinking"] = ["type": level == .off ? "disabled" : "enabled"]
+            }
         case .claude, .gemini, .custom:
             break
         }
@@ -657,8 +693,8 @@ enum FlyMailAI {
         let model = profile.model.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? profile.model
         var root = profile.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         if root.hasSuffix("/openai") { root.removeLast("/openai".count) }
-        let rootURL = try endpoint(baseURL: root, path: "/v1beta")
-        guard let url = URL(string: rootURL.absoluteString + "/models/\(model):generateContent") else {
+        if !root.hasSuffix("/v1beta") { root += "/v1beta" }
+        guard let url = URL(string: root + "/models/\(model):generateContent") else {
             throw AIError.badURL
         }
 
