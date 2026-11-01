@@ -116,10 +116,15 @@ enum LocalBackup {
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         let zip = try Data(contentsOf: url)
         let entries = try ZipStore.read(zip)
-        guard let json = entries["backup.json"] else { throw BackupError.noBackupJson }
+        // 兼容被“文件”App / Mac 重新压缩过的 zip：backup.json 可能在子文件夹里，还会带 __MACOSX 垃圾条目
+        let usable = entries.filter { !$0.key.hasPrefix("__MACOSX/") && !$0.key.hasSuffix("/") }
+        let jsonKey = usable.keys.filter { $0 == "backup.json" || $0.hasSuffix("/backup.json") }.min { $0.count < $1.count }
+        guard let jsonKey, let json = usable[jsonKey] else { throw BackupError.noBackupJson }
         let data = try JSONDecoder().decode(BackupData.self, from: json)
         guard data.version == 1 else { throw BackupError.unsupportedVersion }
-        let drafts = entries.filter { $0.key.hasPrefix("drafts/") }.map { (name: String($0.key.dropFirst(7)), data: $0.value) }
+        let drafts = usable
+            .filter { $0.key.hasPrefix("drafts/") || $0.key.contains("/drafts/") }
+            .map { (name: ($0.key as NSString).lastPathComponent, data: $0.value) }
         return ParsedBackup(data: data, drafts: drafts)
     }
 
@@ -177,9 +182,10 @@ enum LocalBackup {
     }
 
     enum BackupError: LocalizedError {
-        case noBackupJson, unsupportedVersion
+        case noBackupJson, unsupportedVersion, unsupportedCompression
         var errorDescription: String? {
             switch self {
+            case .unsupportedCompression: return "这个 zip 的压缩方式读不了，请用 App 导出的原始备份文件"
             case .noBackupJson: return "这个 zip 里没有 backup.json，不是 FlyMail 导出的备份"
             case .unsupportedVersion: return "备份版本太新或太旧，当前 App 读不了"
             }
@@ -243,8 +249,20 @@ enum ZipStore {
             guard localOffset + 30 <= zip.count else { break }
             let lNameLen = Int(read16(zip, localOffset + 26)), lExtraLen = Int(read16(zip, localOffset + 28))
             let dataStart = localOffset + 30 + lNameLen + lExtraLen
-            guard method == 0, dataStart + compSize <= zip.count else { throw LocalBackup.BackupError.noBackupJson }
-            out[name] = zip[dataStart..<dataStart + compSize]
+            guard dataStart + compSize <= zip.count else { throw LocalBackup.BackupError.noBackupJson }
+            let raw = Data(zip[dataStart..<dataStart + compSize])
+            switch method {
+            case 0:
+                out[name] = raw
+            case 8:
+                // 被系统“压缩”过的 zip 用 deflate：Foundation 的 .zlib 吃的就是 zip 里的裸 deflate 流
+                guard let inflated = try? (raw as NSData).decompressed(using: .zlib) else {
+                    throw LocalBackup.BackupError.unsupportedCompression
+                }
+                out[name] = inflated as Data
+            default:
+                throw LocalBackup.BackupError.unsupportedCompression
+            }
             pos += 46 + nameLen + extraLen + commentLen
         }
         return out

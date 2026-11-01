@@ -36,20 +36,21 @@ struct DockBar: View {
     private var highlightedIndex: Int { Int(progress.rounded()) }
 
     var body: some View {
+        // 只有玻璃（条子 + 滑块）放进 GlassEffectContainer；图标文字放在容器外面的 overlay 里。
+        // 容器内的玻璃会被系统合成到同级内容的上面，图标文字放里面就会被玻璃“折射”成重影、发虚。
         GlassEffectContainer(spacing: 0) {
             ZStack(alignment: .leading) {
-                // 条子本身
                 Color.clear
                     .frame(maxWidth: .infinity)
                     .frame(height: itemHeight + inset * 2)
                     .glassEffect(.regular, in: Capsule())
                 slider
-                labels
             }
-            .contentShape(Capsule())
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0 }
-            .gesture(dockGesture)
         }
+        .overlay { labels }
+        .contentShape(Capsule())
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0 }
+        .gesture(dockGesture)
         .onChange(of: touching) { _, isTouching in
             // 手势被系统取消：松手逻辑没跑，这里把按住状态收回来
             if !isTouching, pressed { settle(to: nil) }
