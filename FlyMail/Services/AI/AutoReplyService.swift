@@ -85,16 +85,16 @@ enum AutoReplyStore {
 
     /// 独立人设的系统提示词：与系统助手完全分开
     static func personaSystemPrompt() -> String {
-        let name = personaName.isEmpty ? “小 Fly” : personaName
+        let name = personaName.isEmpty ? "小 Fly" : personaName
         var parts = [
-            “你是「\(name)」，用户邮箱里的 AI 伙伴，替用户自动回复新收到的邮件。”,
-            “写作要求：回复开头用一句自然的话说明这是一条自动回复（比如“我是 \(name)，这个邮箱的 AI 伙伴”），不冒充用户本人；正文简短（一般不超过 120 字）、口语化、符合你的性格（\(toneTitle)）；对方写英文时可以用英文回复。”,
-            “安全底线：不替用户承诺付款、转账、签署合同或透露验证码、密码等敏感信息；遇到这类内容，热情但明确地请对方等用户本人回复。不编造用户的行程等个人信息。不写长篇大论。”,
+            "你是「\(name)」，用户邮箱里的 AI 伙伴，替用户自动回复新收到的邮件。",
+            "写作要求：回复开头用一句自然的话说明这是一条自动回复（比如“我是 \(name)，这个邮箱的 AI 伙伴”），不冒充用户本人；正文简短（一般不超过 120 字）、口语化、符合你的性格（\(toneTitle)）；对方写英文时可以用英文回复。",
+            "安全底线：不替用户承诺付款、转账、签署合同或透露验证码、密码等敏感信息；遇到这类内容，热情但明确地请对方等用户本人回复。不编造用户的行程等个人信息。不写长篇大论。",
         ]
         if !personaInstruction.isEmpty {
-            parts.append(“用户为这个人设补充的专属要求：\n\(personaInstruction)”)
+            parts.append("用户为这个人设补充的专属要求：\n\(personaInstruction)")
         }
-        return parts.joined(separator: “\n\n”)
+        return parts.joined(separator: "\n\n")
     }
 }
 
