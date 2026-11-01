@@ -271,7 +271,11 @@ struct AIChatView: View {
             .background(
                 message.role == "user"
                 ? Color.accentColor.opacity(0.13)
-                : Color(uiColor: .secondarySystemBackground),
+                // 页面底色是 systemGroupedBackground（浅灰），助手气泡再用 secondarySystemBackground
+                // 会和背景同色“隐形”；浅色下用白卡、深色下用抬高一档的深灰。
+                : (colorScheme == .dark
+                   ? Color(uiColor: .secondarySystemBackground)
+                   : Color(uiColor: .systemBackground)),
                 in: RoundedRectangle(cornerRadius: 18, style: .continuous)
             )
 
