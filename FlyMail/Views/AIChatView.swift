@@ -20,30 +20,36 @@ struct AIChatView: View {
     @State private var showAISettings = false
     @State private var showPhotoPicker = false
     @State private var showFileImporter = false
-    @State private var showMore = false
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var selectedProfileID = ""
     @State private var reasoningLevel: AIReasoningLevel = .off
     @State private var loadingAttachments = false
+    @State private var isSelecting = false
+    @State private var selectedConversationIDs: Set<String> = []
+    @State private var showArchived = false
     @FocusState private var focused: Bool
 
     @AppStorage(AIPersonalization.enterToSendKey) private var enterToSend = false
+    @AppStorage(AIPersonalization.nameKey) private var assistantName = "FlyMail 助手"
 
     private var profiles: [AIModelProfile] { AIModelStore.loadProfiles() }
     private var selectedProfile: AIModelProfile? {
         if selectedProfileID.isEmpty { return FlyMailAI.primaryProfile() }
         return profiles.first(where: { $0.id == selectedProfileID })
     }
-    private var selectedProfileTitle: String {
-        selectedProfileID.isEmpty ? "首选模型" : (selectedProfile?.name ?? "选择模型")
-    }
-    private var filteredConversations: [AIConversation] {
+    private func conversationsMatchingSearch(_ list: [AIConversation]) -> [AIConversation] {
         let keyword = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !keyword.isEmpty else { return conversations }
-        return conversations.filter {
+        guard !keyword.isEmpty else { return list }
+        return list.filter {
             $0.title.localizedCaseInsensitiveContains(keyword) ||
             $0.messages.contains { $0.content.localizedCaseInsensitiveContains(keyword) }
         }
+    }
+    private var activeConversations: [AIConversation] {
+        conversationsMatchingSearch(conversations.filter { !$0.isArchived })
+    }
+    private var archivedConversations: [AIConversation] {
+        conversationsMatchingSearch(conversations.filter { $0.isArchived })
     }
 
     var body: some View {
@@ -96,6 +102,13 @@ struct AIChatView: View {
                 Task { await importPhotos(items) }
             }
             .onAppear(perform: restoreConversations)
+            .onChange(of: showSidebar) { _, open in
+                // 侧栏展开时通知 RootView 收起底部 dock，避免 dock 压住侧栏右下角内容。
+                app.isAIHistorySidebarOpen = open
+            }
+            .onDisappear {
+                app.isAIHistorySidebarOpen = false
+            }
             .alert(
                 "AI 请求失败",
                 isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })
@@ -124,9 +137,12 @@ struct AIChatView: View {
             .accessibilityLabel("对话历史")
             .accessibilityIdentifier("ai.history")
 
-            Text("AI")
-                .font(.system(size: 32, weight: .bold, design: .rounded))
+            // 顶部不再放一个大大的“AI”：显示用户自定义的助手名称，
+            // 字号与旁边 42pt 的按钮对齐，不再突兀。
+            Text(assistantName.isEmpty ? "AI 助手" : assistantName)
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.primary)
+                .lineLimit(1)
 
             Spacer(minLength: 8)
 
@@ -304,7 +320,7 @@ struct AIChatView: View {
                 }
                 .accessibilityLabel("添加图片或文件")
 
-                TextField("发送消息…", text: $input, axis: .vertical)
+                TextField("发送消息…", text: $input, axis: .vertical, prompt: Text(composerPlaceholder))
                     .lineLimit(1...5)
                     .focused($focused)
                     .submitLabel(enterToSend ? .send : .return)
@@ -313,6 +329,18 @@ struct AIChatView: View {
                     }
                     .padding(.vertical, 9)
                     .padding(.horizontal, 3)
+
+                // “更多”收成圆形按钮，放在发送左边；模型与思考等级不再单独占一整行。
+                Menu {
+                    moreMenuContent
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 38, height: 38)
+                        .background(Color.secondary.opacity(0.12), in: Circle())
+                }
+                .accessibilityLabel("更多选项")
 
                 Button(action: send) {
                     Group {
@@ -333,93 +361,6 @@ struct AIChatView: View {
                 )
                 .accessibilityLabel("发送")
             }
-
-            HStack(spacing: 8) {
-                Menu {
-                    Section("模型") {
-                        Button {
-                            selectedProfileID = ""
-                            reasoningLevel = .off
-                        } label: {
-                            if selectedProfileID.isEmpty {
-                                Label("首选模型（自动回退）", systemImage: "checkmark")
-                            } else {
-                                Text("首选模型（自动回退）")
-                            }
-                        }
-                        ForEach(profiles) { profile in
-                            Button {
-                                selectedProfileID = profile.id
-                                reasoningLevel = profile.reasoningDefault
-                            } label: {
-                                if selectedProfileID == profile.id {
-                                    Label(profile.name, systemImage: "checkmark")
-                                } else {
-                                    Text(profile.name)
-                                }
-                            }
-                        }
-                    }
-                    if let selectedProfile, FlyMailAI.canControlReasoning(selectedProfile) {
-                        Section("思考等级") {
-                            ForEach(FlyMailAI.reasoningOptions(for: selectedProfile)) { level in
-                                let title = FlyMailAI.reasoningTitle(level, for: selectedProfile)
-                                Button {
-                                    reasoningLevel = level
-                                } label: {
-                                    if reasoningLevel == level {
-                                        Label(title, systemImage: "checkmark")
-                                    } else {
-                                        Text(title)
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        Section("思考等级") {
-                            Text("当前模型不支持单独调整思考等级")
-                        }
-                    }
-                    if let selectedProfile, selectedProfile.provider == .gemini,
-                       selectedProfile.model.lowercased().contains("2.5"), selectedProfile.model.lowercased().contains("pro") {
-                        Text("Gemini 2.5 Pro 不支持完全关闭思考。")
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "slider.horizontal.3")
-                        Text("更多")
-                    }
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.secondary.opacity(0.12), in: Capsule())
-                }
-
-                Text(selectedProfileTitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-
-                if let selectedProfile {
-                    Text("·")
-                        .foregroundStyle(.tertiary)
-                    Text(FlyMailAI.reasoningTitle(reasoningLevel, for: selectedProfile) + "思考")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer(minLength: 0)
-
-                if enterToSend {
-                    Label("回车发送", systemImage: "return")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                if loadingAttachments {
-                    ProgressView().scaleEffect(0.75)
-                }
-            }
         }
         .padding(12)
         .background {
@@ -435,12 +376,88 @@ struct AIChatView: View {
         .shadow(color: .black.opacity(0.07), radius: 12, y: 4)
     }
 
+    /// “更多”菜单内容：切换模型 + 调思考等级（原先铺在输入框下方一整行，现在收进圆形按钮）。
+    @ViewBuilder
+    private var moreMenuContent: some View {
+        Section("模型") {
+            Button {
+                selectedProfileID = ""
+                reasoningLevel = .off
+            } label: {
+                if selectedProfileID.isEmpty {
+                    Label("首选模型（自动回退）", systemImage: "checkmark")
+                } else {
+                    Text("首选模型（自动回退）")
+                }
+            }
+            ForEach(profiles) { profile in
+                Button {
+                    selectedProfileID = profile.id
+                    reasoningLevel = profile.reasoningDefault
+                } label: {
+                    if selectedProfileID == profile.id {
+                        Label(profile.name, systemImage: "checkmark")
+                    } else {
+                        Text(profile.name)
+                    }
+                }
+            }
+        }
+        if let selectedProfile, FlyMailAI.canControlReasoning(selectedProfile) {
+            Section("思考等级") {
+                ForEach(FlyMailAI.reasoningOptions(for: selectedProfile)) { level in
+                    let title = FlyMailAI.reasoningTitle(level, for: selectedProfile)
+                    Button {
+                        reasoningLevel = level
+                    } label: {
+                        if reasoningLevel == level {
+                            Label(title, systemImage: "checkmark")
+                        } else {
+                            Text(title)
+                        }
+                    }
+                }
+            }
+        } else {
+            Section("思考等级") {
+                Text("当前模型不支持单独调整思考等级")
+            }
+        }
+        if let selectedProfile, selectedProfile.provider == .gemini,
+           selectedProfile.model.lowercased().contains("2.5"), selectedProfile.model.lowercased().contains("pro") {
+            Text("Gemini 2.5 Pro 不支持完全关闭思考。")
+        }
+    }
+
+    /// 输入框为空时把当前模型与思考等级展示在输入框里；开始输入（或已有附件）后让位给正常占位文案。
+    private var composerPlaceholder: String {
+        guard input.isEmpty, draftAttachments.isEmpty else { return "发送消息…" }
+        guard let profile = selectedProfile else { return "发送消息…" }
+        let reasoning = reasoningLevel == .off
+            ? "思考已关闭"
+            : "思考 · \(FlyMailAI.reasoningTitle(reasoningLevel, for: profile))"
+        return "\(profile.name) · \(reasoning)"
+    }
+
     private var historySidebar: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
                 Text("对话")
                     .font(.title2.bold())
-                Spacer()
+                Spacer(minLength: 0)
+                Button {
+                    if isSelecting {
+                        isSelecting = false
+                        selectedConversationIDs.removeAll()
+                    } else {
+                        isSelecting = true
+                    }
+                } label: {
+                    Text(isSelecting ? "完成" : "编辑")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.borderless)
+                .accessibilityIdentifier("ai.history.edit")
                 Button { closeSidebar() } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 14, weight: .semibold))
@@ -448,6 +465,7 @@ struct AIChatView: View {
                         .frame(width: 30, height: 30)
                         .background(Color.secondary.opacity(0.12), in: Circle())
                 }
+                .buttonStyle(.plain)
             }
             .padding(.top, 58)
 
@@ -470,65 +488,173 @@ struct AIChatView: View {
             .padding(11)
             .background(Color.secondary.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
 
-            Text(searchText.isEmpty ? "最近对话" : "搜索结果")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            ScrollView {
-                LazyVStack(spacing: 4) {
-                    ForEach(filteredConversations) { conversation in
-                        Button {
-                            openConversation(conversation)
-                        } label: {
-                            HStack(alignment: .top, spacing: 10) {
-                                Image(systemName: "bubble.left")
-                                    .foregroundStyle(.secondary)
-                                    .padding(.top, 2)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(conversation.title)
-                                        .font(.subheadline.weight(.medium))
-                                        .lineLimit(2)
-                                        .foregroundStyle(.primary)
-                                    Text(conversation.updatedAt, style: .date)
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer(minLength: 0)
-                                if conversation.id == currentConversationID {
-                                    Circle().fill(Color.accentColor).frame(width: 7, height: 7)
-                                }
-                            }
-                            .padding(10)
-                            .background(
-                                conversation.id == currentConversationID
-                                ? Color.accentColor.opacity(0.10)
-                                : Color.clear,
-                                in: RoundedRectangle(cornerRadius: 11)
-                            )
+            if isSelecting {
+                HStack(spacing: 12) {
+                    let allSelected = !activeConversations.isEmpty
+                        && selectedConversationIDs.count >= activeConversations.count
+                    Button(allSelected ? "全不选" : "全选") {
+                        if allSelected {
+                            selectedConversationIDs.removeAll()
+                        } else {
+                            selectedConversationIDs = Set(activeConversations.map(\.id))
                         }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                deleteConversation(conversation)
-                            } label: {
-                                Label("删除对话", systemImage: "trash")
+                    }
+                    .font(.subheadline)
+                    Spacer(minLength: 0)
+                    Text("已选 \(selectedConversationIDs.count)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            List {
+                Section {
+                    ForEach(activeConversations) { conversation in
+                        conversationRow(conversation)
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button(role: .destructive) {
+                                    deleteConversation(conversation)
+                                } label: {
+                                    Label("删除", systemImage: "trash")
+                                }
+                                Button {
+                                    setArchived(conversation, archived: true)
+                                } label: {
+                                    Label("归档", systemImage: "archivebox")
+                                }
+                                .tint(.blue)
                             }
+                    }
+                } header: {
+                    Text(searchText.isEmpty ? "最近对话" : "搜索结果")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+
+                if !archivedConversations.isEmpty {
+                    Section {
+                        if showArchived {
+                            ForEach(archivedConversations) { conversation in
+                                conversationRow(conversation)
+                                    .listRowSeparator(.hidden)
+                                    .listRowBackground(Color.clear)
+                                    .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                        Button(role: .destructive) {
+                                            deleteConversation(conversation)
+                                        } label: {
+                                            Label("删除", systemImage: "trash")
+                                        }
+                                        Button {
+                                            setArchived(conversation, archived: false)
+                                        } label: {
+                                            Label("恢复", systemImage: "tray.and.arrow.up")
+                                        }
+                                        .tint(.blue)
+                                    }
+                            }
+                        }
+                    } header: {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.18)) { showArchived.toggle() }
+                        } label: {
+                            Label(
+                                "已归档 \(archivedConversations.count)",
+                                systemImage: showArchived ? "chevron.down" : "chevron.right"
+                            )
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
                         }
                     }
                 }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
 
-            Spacer(minLength: 0)
-            Divider()
-            HStack(spacing: 8) {
-                Image(systemName: "lock.shield").foregroundStyle(.secondary)
-                Text("对话和记忆仅保存在本机")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            if isSelecting {
+                HStack(spacing: 10) {
+                    Button {
+                        archiveSelected()
+                    } label: {
+                        Label("归档所选", systemImage: "archivebox")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(selectedConversationIDs.isEmpty)
+
+                    Button(role: .destructive) {
+                        deleteSelected()
+                    } label: {
+                        Label("删除所选", systemImage: "trash")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                    .disabled(selectedConversationIDs.isEmpty)
+
+                    Spacer(minLength: 0)
+                }
+            } else {
+                HStack(spacing: 8) {
+                    Image(systemName: "lock.shield").foregroundStyle(.secondary)
+                    Text("对话和记忆仅保存在本机")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
-            .padding(.bottom, 34)
+            .padding(.bottom, 30)
         }
         .padding(.horizontal, 16)
+    }
+
+    private func conversationRow(_ conversation: AIConversation) -> some View {
+        let isSelected = selectedConversationIDs.contains(conversation.id)
+        return Button {
+            if isSelecting {
+                toggleSelection(conversation.id)
+            } else {
+                openConversation(conversation)
+            }
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                if isSelecting {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 19))
+                        .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                        .padding(.top, 1)
+                } else {
+                    Image(systemName: "bubble.left")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 3)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(conversation.title)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(2)
+                        .foregroundStyle(.primary)
+                    Text(conversation.updatedAt, style: .date)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                if conversation.id == currentConversationID, !isSelecting {
+                    Circle().fill(Color.accentColor)
+                        .frame(width: 7, height: 7)
+                        .padding(.top, 6)
+                }
+            }
+            .padding(10)
+            .background(
+                conversation.id == currentConversationID && !isSelecting
+                ? Color.accentColor.opacity(0.10)
+                : Color.clear,
+                in: RoundedRectangle(cornerRadius: 11)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 11))
+        }
+        .buttonStyle(.plain)
     }
 
     private func restoreConversations() {
@@ -586,9 +712,47 @@ struct AIChatView: View {
     private func deleteConversation(_ conversation: AIConversation) {
         conversations.removeAll { $0.id == conversation.id }
         AIConversationStore.save(conversations)
+        selectedConversationIDs.remove(conversation.id)
         if currentConversationID == conversation.id {
             createConversation(persist: false)
         }
+    }
+
+    private func setArchived(_ conversation: AIConversation, archived: Bool) {
+        guard let index = conversations.firstIndex(where: { $0.id == conversation.id }) else { return }
+        conversations[index].isArchived = archived
+        AIConversationStore.save(conversations)
+    }
+
+    private func toggleSelection(_ id: String) {
+        if selectedConversationIDs.contains(id) {
+            selectedConversationIDs.remove(id)
+        } else {
+            selectedConversationIDs.insert(id)
+        }
+    }
+
+    private func archiveSelected() {
+        guard !selectedConversationIDs.isEmpty else { return }
+        let ids = selectedConversationIDs
+        for id in ids {
+            if let index = conversations.firstIndex(where: { $0.id == id }) {
+                conversations[index].isArchived = true
+            }
+        }
+        AIConversationStore.save(conversations)
+        selectedConversationIDs.removeAll()
+    }
+
+    private func deleteSelected() {
+        guard !selectedConversationIDs.isEmpty else { return }
+        let deleting = selectedConversationIDs
+        conversations.removeAll { deleting.contains($0.id) }
+        if let current = currentConversationID, deleting.contains(current) {
+            createConversation(persist: false)
+        }
+        AIConversationStore.save(conversations)
+        selectedConversationIDs.removeAll()
     }
 
     private func saveCurrentConversation() {

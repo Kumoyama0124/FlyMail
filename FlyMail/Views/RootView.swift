@@ -43,12 +43,14 @@ struct RootView: View {
         // dock 单独放在 DockBar 里，body 里只留一行引用，也避免编译器类型推断超时。
         .overlay(alignment: .bottom) {
             // 底部 dock 栏：只在 iPhone（紧凑宽度）显示，iPad 有侧边栏就不需要，
-            // 邮件详情页有自己的底部栏，dock 让位给它。
-            if sizeClass == .compact, showDock {
+            // 邮件详情页有自己的底部栏，dock 让位给它；AI 历史侧栏展开时同样让位。
+            if dockVisible {
                 dockOverlay
                     .zIndex(100)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: dockVisible)
         .background { BadgeUpdater() }
         .sheet(isPresented: $app.showingAccountSetup) { AccountSetupView() }
         .sheet(isPresented: $app.showingSettings) { SettingsView() }
@@ -94,7 +96,13 @@ struct RootView: View {
             .padding(.bottom, 2)
     }
 
-    /// 邮件栏目里打开了详情页时不显示 dock，详情页自己的底部栏在底下
+    /// 邮件栏目里打开了详情页时不显示 dock，详情页自己的底部栏在底下；
+    /// AI 历史侧栏全屏展开时 dock 也不显示——侧栏有自己的关闭按钮和底部操作区，
+    /// 底下再浮一条 dock 只会遮住侧栏右下角的内容。
+    private var dockVisible: Bool {
+        sizeClass == .compact && showDock && !app.isAIHistorySidebarOpen
+    }
+
     private var showDock: Bool {
         !(app.dockTab == .mail && app.selectedMessage != nil)
     }

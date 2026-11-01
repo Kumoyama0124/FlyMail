@@ -60,4 +60,6 @@ final class AppState {
     /// 底部 dock 栏目：首页 / 邮件 / AI / 我的（“我的”和其他栏目一样是栏目，不是弹页）
     enum DockTab { case home, mail, ai, my }
     var dockTab: DockTab = .home
+    /// AI 历史侧栏是否展开：展开时底部 dock 整条让位，不再压住侧栏右下角内容
+    var isAIHistorySidebarOpen = false
 }

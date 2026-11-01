@@ -33,6 +33,33 @@ struct AIConversation: Identifiable, Codable {
     var title: String
     var messages: [AIChatMessage] = []
     var updatedAt: Date = .now
+    var isArchived: Bool = false
+
+    init(
+        id: String = UUID().uuidString,
+        title: String,
+        messages: [AIChatMessage] = [],
+        updatedAt: Date = .now,
+        isArchived: Bool = false
+    ) {
+        self.id = id
+        self.title = title
+        self.messages = messages
+        self.updatedAt = updatedAt
+        self.isArchived = isArchived
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, title, messages, updatedAt, isArchived }
+
+    // 旧数据没有 isArchived 字段，用 decodeIfPresent 兜底，避免整份记录解码失败。
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? "新对话"
+        messages = try container.decodeIfPresent([AIChatMessage].self, forKey: .messages) ?? []
+        updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? .now
+        isArchived = try container.decodeIfPresent(Bool.self, forKey: .isArchived) ?? false
+    }
 }
 
 enum AIConversationStore {
