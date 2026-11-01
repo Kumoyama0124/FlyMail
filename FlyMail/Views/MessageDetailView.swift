@@ -1,4 +1,4 @@
-import SwiftUI
+﻿import SwiftUI
 import SwiftData
 import WebKit
 import QuickLook
@@ -63,7 +63,7 @@ struct MessageDetailView: View {
             if aiBusy {
                 VStack(spacing: 10) {
                     ProgressView()
-                    Text("AI 处理中…").font(.callout).foregroundStyle(.secondary)
+                    Text(L10n.t("AI 处理中…")).font(.callout).foregroundStyle(.secondary)
                 }
                 .padding(24)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -137,7 +137,7 @@ struct MessageDetailView: View {
                     }
                     Divider()
                     Button { openAI("我想针对这封邮件继续讨论，请先帮我记住它的内容：\n\n主题：\(message.subject)\n发件人：\(message.from)\n\n\(mailContentForAI)") } label: {
-                        Label("在 AI 对话中深入", systemImage: "bubble.left.and.text.bubble.right")
+                        Label(L10n.t("在 AI 对话中深入"), systemImage: "bubble.left.and.text.bubble.right")
                     }
                     Divider()
                     Button("回复", systemImage: "arrowshape.turn.up.left") { reply(all: false) }
@@ -409,7 +409,7 @@ struct AIQuickResultSheet: View {
                             UIPasteboard.general.string = result.text
                             copied = true
                         } label: {
-                            Label(copied ? "已复制" : "复制", systemImage: copied ? "checkmark" : "doc.on.doc")
+                            Label(copied ? L10n.t("已复制") : L10n.t("复制"), systemImage: copied ? "checkmark" : "doc.on.doc")
                         }
                         .buttonStyle(.bordered)
                         Spacer(minLength: 0)
@@ -422,7 +422,7 @@ struct AIQuickResultSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { dismiss() }
+                    Button(L10n.t("关闭")) { dismiss() }
                 }
             }
         }

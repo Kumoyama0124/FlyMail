@@ -64,4 +64,6 @@ final class AppState {
     var isAIHistorySidebarOpen = false
     /// AI 输入框获得焦点（键盘弹出）时 dock 同样让位，输入框顶格贴住键盘
     var isAIComposerFocused = false
+    /// 语言切换时 +1：RootView 用它作 .id 强制重建整棵界面树，切语言立即生效
+    var uiLanguageRev = 0
 }

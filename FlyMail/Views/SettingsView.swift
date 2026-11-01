@@ -1,4 +1,4 @@
-import SwiftUI
+﻿import SwiftUI
 import SwiftData
 import UserNotifications
 import PhotosUI
@@ -17,6 +17,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.grouping) private var grouping = false
     @AppStorage(Prefs.mySignatureCard) private var signatureCard = true
     @AppStorage(Prefs.vipList) private var vipRaw = ""
+    @AppStorage("app.language") private var appLanguage = ""
     @State private var confirmReset = false
     @State private var confirmClearAvatar = false
 
@@ -24,49 +25,62 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    NavigationLink { AISettingsView() } label: { Label("AI", systemImage: "sparkles") }
-                    NavigationLink { SyncSettingsView() } label: { Label("同步", systemImage: "arrow.triangle.2.circlepath") }
+                    NavigationLink { AISettingsView() } label: { Label(L10n.t("AI"), systemImage: "sparkles") }
+                    NavigationLink { SyncSettingsView() } label: { Label(L10n.t("同步"), systemImage: "arrow.triangle.2.circlepath") }
                 }
-                Section("自定义") {
-                    NavigationLink { SidebarEditView() } label: { Label("编辑侧边栏", systemImage: "sidebar.left") }
-                    NavigationLink { AppearanceSettingsView() } label: { Label("外观与列表", systemImage: "paintbrush") }
-                    NavigationLink { SwipeSettingsView() } label: { Label("滑动操作", systemImage: "hand.draw") }
-                    Toggle(isOn: $grouping) { Label("按主题合并会话", systemImage: "bubble.left.and.bubble.right") }
+                Section {
+                    Picker(selection: $appLanguage) {
+                        Text(L10n.t("跟随系统")).tag("")
+                        Text("简体中文").tag("zh-Hans")
+                        Text("繁體中文").tag("zh-Hant")
+                        Text("English").tag("en")
+                        Text("日本語").tag("ja")
+                    } label: { Label(L10n.t("语言"), systemImage: "globe") }
+                } header: {
+                    Text(L10n.t("通用"))
+                } footer: {
+                    Text(L10n.t("默认跟随系统语言，可手动固定。切换后日期、系统菜单等会立即跟随所选语言；应用内文案正在逐步适配以上语言。"))
+                }
+                Section(L10n.t("自定义")) {
+                    NavigationLink { SidebarEditView() } label: { Label(L10n.t("编辑侧边栏"), systemImage: "sidebar.left") }
+                    NavigationLink { AppearanceSettingsView() } label: { Label(L10n.t("外观与列表"), systemImage: "paintbrush") }
+                    NavigationLink { SwipeSettingsView() } label: { Label(L10n.t("滑动操作"), systemImage: "hand.draw") }
+                    Toggle(isOn: $grouping) { Label(L10n.t("按主题合并会话"), systemImage: "bubble.left.and.bubble.right") }
                 }
                 Section {
                     Picker(selection: $defaultAccount) {
-                        Text("第一个账户").tag("")
+                        Text(L10n.t("第一个账户")).tag("")
                         ForEach(accounts) { Text($0.email).tag($0.id.uuidString) }
-                    } label: { Label("默认邮箱", systemImage: "envelope") }
+                    } label: { Label(L10n.t("默认邮箱"), systemImage: "envelope") }
                     Picker(selection: $badgeSource) {
-                        Text("仅收件箱未读").tag("inbox"); Text("所有未读").tag("all"); Text("VIP 未读").tag("vip"); Text("不显示").tag("none")
-                    } label: { Label("应用角标", systemImage: "app.badge") }
-                    Toggle(isOn: $signatureCard) { Label("资料卡签名", systemImage: "signature") }
+                        Text(L10n.t("仅收件箱未读")).tag("inbox"); Text(L10n.t("所有未读")).tag("all"); Text(L10n.t("VIP 未读")).tag("vip"); Text(L10n.t("不显示")).tag("none")
+                    } label: { Label(L10n.t("应用角标"), systemImage: "app.badge") }
+                    Toggle(isOn: $signatureCard) { Label(L10n.t("资料卡签名"), systemImage: "signature") }
                 }
                 Section {
                     // 备份与恢复是单独独立的一页：从设置页点进去是它，
                     // 从“我的”页点进去也是它，不再是设置页里的一个 Section
-                    NavigationLink { BackupRestoreView() } label: { Label("备份与恢复", systemImage: "externaldrive") }
+                    NavigationLink { BackupRestoreView() } label: { Label(L10n.t("备份与恢复"), systemImage: "externaldrive") }
                 }
                 Section {
-                    Toggle(isOn: $showAvatars) { Label("显示头像", systemImage: "person.crop.circle") }
-                    Toggle(isOn: $remoteAvatars) { Label("加载发件人头像", systemImage: "photo.circle") }.disabled(!showAvatars)
-                    Button(role: .destructive) { confirmClearAvatar = true } label: { Label("清除头像缓存", systemImage: "trash") }
+                    Toggle(isOn: $showAvatars) { Label(L10n.t("显示头像"), systemImage: "person.crop.circle") }
+                    Toggle(isOn: $remoteAvatars) { Label(L10n.t("加载发件人头像"), systemImage: "photo.circle") }.disabled(!showAvatars)
+                    Button(role: .destructive) { confirmClearAvatar = true } label: { Label(L10n.t("清除头像缓存"), systemImage: "trash") }
                 }
                 Section {
-                    NavigationLink { VIPListView() } label: { HStack { Label("VIP 发件人", systemImage: "star.circle"); Spacer(); Text("\(VIPStore.list.count)").foregroundStyle(.secondary) } }
-                    NavigationLink { SpamSettingsView() } label: { Label("垃圾邮件", systemImage: "xmark.bin") }
+                    NavigationLink { VIPListView() } label: { HStack { Label(L10n.t("VIP 发件人"), systemImage: "star.circle"); Spacer(); Text("\(VIPStore.list.count)").foregroundStyle(.secondary) } }
+                    NavigationLink { SpamSettingsView() } label: { Label(L10n.t("垃圾邮件"), systemImage: "xmark.bin") }
                 }
                 Section {
-                    Button(role: .destructive) { confirmReset = true } label: { Label("还原设置", systemImage: "arrow.counterclockwise") }
+                    Button(role: .destructive) { confirmReset = true } label: { Label(L10n.t("还原设置"), systemImage: "arrow.counterclockwise") }
                 } footer: {
                     // 还原设置按钮下面一行功能提示：点之前就知道它是干嘛的，不用点进确认框才看到
-                    Text("将侧边栏、外观、滑动等自定义还原为默认，不影响账户和 VIP。")
+                    Text(L10n.t("将侧边栏、外观、滑动等自定义还原为默认，不影响账户和 VIP。"))
                 }
             }
-            .navigationTitle("设置")
-            .toolbar { Button("完成") { dismiss() } }
-            .alert("还原设置？", isPresented: $confirmReset) {
+            .navigationTitle(L10n.t("设置"))
+            .toolbar { Button(L10n.t("完成")) { dismiss() } }
+            .alert(L10n.t("还原设置？"), isPresented: $confirmReset) {
                 Button("还原", role: .destructive) {
                     Prefs.resetAll()
                     for a in accounts { a.sortIndex = 0; a.colorIndex = 0; a.collapsedRoles = ["inbox", "sent"]; a.hiddenFolders = []
@@ -399,10 +413,10 @@ struct AISettingsView: View {
                 Button {
                     editorRequest = AIModelEditorRequest(profile: AIModelProfile.makeDefault(), isNew: true)
                 } label: {
-                    Label("添加模型", systemImage: "plus.circle.fill")
+                    Label(L10n.t("添加模型"), systemImage: "plus.circle.fill")
                 }
             } header: {
-                Text("模型配置")
+                Text(L10n.t("模型配置"))
             } footer: {
                 Text("每个模型独立保存服务商、API 地址、模型名称和 API Key。可以添加多个配置，并在模型列表中拖动调整备用模型的尝试顺序。")
             }
@@ -412,7 +426,7 @@ struct AISettingsView: View {
                     Text("添加模型后即可选择首选和备用模型。")
                         .foregroundStyle(.secondary)
                 } else {
-                    Picker("首选模型", selection: $primaryID) {
+                    Picker(L10n.t("首选模型"), selection: $primaryID) {
                         ForEach(profiles) { profile in
                             Text(profile.name).tag(profile.id)
                         }
@@ -431,7 +445,7 @@ struct AISettingsView: View {
                     }
                 }
             } header: {
-                Text("主模型与回退")
+                Text(L10n.t("主模型与回退"))
             } footer: {
                 Text("先请求首选模型；失败、超时或返回错误时，按模型列表顺序尝试开启的备用模型。没有勾选为备用的模型不会被自动调用。")
             }
@@ -462,18 +476,17 @@ struct AISettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             } header: {
-                Text("AI 个性化")
+                Text(L10n.t("AI 个性化"))
             } footer: {
                 Text("这些设置保存在本机，并自动附加到每次 AI 请求中，不会覆盖邮件原文。")
             }
 
             Section {
-                TextField("助手名称（用于聊天显示）", text: $assistantName)
                 Button { personaPickerOpen = true } label: {
                     HStack(spacing: 12) {
                         personaAvatarView
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("助手头像")
+                            Text(L10n.t("助手头像"))
                             Text("选一张图，正方形裁切后使用")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
@@ -483,50 +496,51 @@ struct AISettingsView: View {
                     }
                 }
                 .buttonStyle(.plain)
+                TextField("助手名称（用于聊天显示）", text: $assistantName)
 
-                Picker("性别", selection: $personaGender) {
+                Picker(L10n.t("性别"), selection: $personaGender) {
                     Text("保密").tag("")
                     Text("男").tag("male")
                     Text("女").tag("female")
                     Text("其他").tag("other")
                 }
                 HStack {
-                    Text("年龄")
+                    Text(L10n.t("年龄"))
                     Spacer()
-                    TextField("未设置", value: $personaAge, format: .number)
+                    TextField(L10n.t("未设置"), value: $personaAge, format: .number)
                         .keyboardType(.numberPad)
                         .multilineTextAlignment(.trailing)
                         .frame(width: 70)
-                    Text("岁").foregroundStyle(.secondary)
+                    Text(L10n.t("岁")).foregroundStyle(.secondary)
                 }
                 HStack {
                     Text("MBTI")
                     Spacer()
-                    TextField("未设置", text: $personaMBTI)
+                    TextField(L10n.t("未设置"), text: $personaMBTI)
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
                         .multilineTextAlignment(.trailing)
                         .frame(width: 90)
                 }
                 HStack {
-                    Text("身高")
+                    Text(L10n.t("身高"))
                     Spacer()
-                    TextField("未设置", value: $personaHeight, format: .number)
+                    TextField(L10n.t("未设置"), value: $personaHeight, format: .number)
                         .keyboardType(.numberPad)
                         .multilineTextAlignment(.trailing)
                         .frame(width: 70)
                     Text("cm").foregroundStyle(.secondary)
                 }
                 HStack {
-                    Text("体重")
+                    Text(L10n.t("体重"))
                     Spacer()
-                    TextField("未设置", value: $personaWeight, format: .number)
+                    TextField(L10n.t("未设置"), value: $personaWeight, format: .number)
                         .keyboardType(.numberPad)
                         .multilineTextAlignment(.trailing)
                         .frame(width: 70)
                     Text("kg").foregroundStyle(.secondary)
                 }
-                Picker("星座", selection: $personaZodiac) {
+                Picker(L10n.t("星座"), selection: $personaZodiac) {
                     ForEach(AIPersonaCardStore.zodiacOptions, id: \.self) { Text($0).tag($0) }
                 }
 
@@ -539,30 +553,30 @@ struct AISettingsView: View {
                     }
                 }
             } header: {
-                Text("助手资料卡")
+                Text(L10n.t("助手资料卡"))
             } footer: {
                 Text("头像显示在 AI 聊天每条回复旁；资料会让 AI 按这个人设回答，全部选填。")
             }
 
             Section {
-                Picker("默认翻译模型", selection: $translationProfileID) {
+                Picker(L10n.t("默认翻译模型"), selection: $translationProfileID) {
                     Text("跟随首选模型").tag("")
                     ForEach(profiles) { profile in
                         Text(profile.name).tag(profile.id)
                     }
                 }
             } header: {
-                Text("翻译")
+                Text(L10n.t("翻译"))
             } footer: {
                 Text("翻译功能会优先使用这里指定的模型；留空时跟随首选模型。摘要、润色和其他邮件 AI 功能默认使用首选模型。")
             }
 
             Section {
-                Toggle("回车键发送", isOn: $enterToSend)
+                Toggle(L10n.t("回车键发送"), isOn: $enterToSend)
                 Toggle("显示头像", isOn: $showAvatar)
-                Toggle("显示名称", isOn: $showName)
+                Toggle(L10n.t("显示名称"), isOn: $showName)
             } header: {
-                Text("聊天体验")
+                Text(L10n.t("聊天体验"))
             } footer: {
                 Text("回车键发送默认关闭：关闭时回车用于换行，开启后按回车直接发送。显示头像/名称开启后，AI 聊天里每条消息旁都会显示对应一侧的头像和名称（像微信那样的对话样式）。")
             }
@@ -596,11 +610,11 @@ struct AISettingsView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
-                Button("清空长期记忆", role: .destructive) {
+                Button(L10n.t("清空长期记忆"), role: .destructive) {
                     AIMemoryStore.clear()
                 }
             } header: {
-                Text("AI 记忆")
+                Text(L10n.t("AI 记忆"))
             } footer: {
                 Text("开启后，FlyMail 会自动压缩较早对话、提炼稳定偏好和重要信息；摘要保存在本机，并用于后续对话。压缩后请求只携带最近 8 条原始消息，可减少重复上下文和 Token 消耗。整理时调用当前首选模型，可能产生少量 API 用量。")
             }
@@ -616,7 +630,7 @@ struct AISettingsView: View {
                     }
                 }
             } header: {
-                Text("自动回复")
+                Text(L10n.t("自动回复"))
             } footer: {
                 Text("默认关闭。开启后由一个独立的“邮箱伙伴”人设自动回复新邮件，与上面的助手人设互不影响。")
             }

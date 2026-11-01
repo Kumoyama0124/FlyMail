@@ -19,6 +19,8 @@ targets:
       path: FlyMail/Resources/Info.plist
       properties:
         CFBundleDisplayName: FlyMail
+        CFBundleShortVersionString: "1.1"
+        CFBundleVersion: "3"
         UILaunchScreen: {}
         UISupportsDocumentBrowser: false
         UIRequiresFullScreen: false

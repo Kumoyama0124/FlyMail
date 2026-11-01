@@ -15,6 +15,7 @@ struct RootView: View {
     /// iPhone 启动直接进入“收件箱”列表
     @State private var compactColumn: NavigationSplitViewColumn = .content
     @AppStorage(Prefs.syncInterval) private var syncInterval = 0
+    @AppStorage("app.language") private var appLanguage = ""
     private let outboxTimer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -36,6 +37,8 @@ struct RootView: View {
             // 弹簧和 DockBar 松手时的 settle 同一个节奏，滑块落位和页面滑入同时到位。
             .animation(.spring(response: 0.38, dampingFraction: 0.82), value: app.dockTab)
             .tint(Prefs.palette[accent % Prefs.palette.count])
+            // 界面语言（默认跟随系统）：影响日期格式、系统菜单等所有走 Locale 的内容
+            .environment(\.locale, appLanguage.isEmpty ? .current : Locale(identifier: appLanguage))
         }
         // dock 必须是真悬浮：用 overlay 贴在内容上面，内容铺满整个屏幕到底，dock 下面看到的就是页面本身的底色
         // （侧边栏/我的页是浅灰，首页/邮件列表是白），不再是一整块白色矩形。dock 再往下挪：overlay 底部只留 2pt，

@@ -100,7 +100,7 @@ struct DockBar: View {
                 let on = i == highlightedIndex
                 VStack(spacing: 3) {
                     Image(systemName: Self.icon(tab)).font(.title3)
-                    Text(Self.title(tab)).font(.caption2.weight(.medium))
+                    Text(L10n.t(Self.title(tab))).font(.caption2.weight(.medium))
                 }
                 // 未选中黑色，选中强调色；选中栏图标稍微放大
                 .foregroundStyle(on ? Color.accentColor : .primary)
@@ -108,7 +108,7 @@ struct DockBar: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: itemHeight)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(Self.title(tab))
+                .accessibilityLabel(L10n.t(Self.title(tab)))
                 .accessibilityAddTraits(tab == app.dockTab ? [.isButton, .isSelected] : .isButton)
                 .accessibilityAction { onSelect(tab) }
             }

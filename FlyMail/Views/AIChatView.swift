@@ -1,4 +1,4 @@
-import SwiftUI
+﻿import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
 import PDFKit
@@ -132,10 +132,10 @@ struct AIChatView: View {
                 app.isAIComposerFocused = false
             }
             .alert(
-                "AI 请求失败",
+                L10n.t("AI 请求失败"),
                 isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })
             ) {
-                Button("好") { }
+                Button(L10n.t("好")) { }
             } message: {
                 Text(error ?? "")
             }
@@ -150,9 +150,10 @@ struct AIChatView: View {
                 }
             } label: {
                 Image(systemName: "sidebar.left")
-                    .font(.system(size: 18, weight: .medium))
+                    .font(.system(size: 17, weight: .medium))
                     .foregroundStyle(.primary)
-                    .frame(width: 42, height: 42)
+                    .frame(width: 40, height: 40)
+                    .glassEffect(.regular, in: Circle())
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
@@ -165,9 +166,10 @@ struct AIChatView: View {
                 showAISettings = true
             } label: {
                 Image(systemName: "gearshape")
-                    .font(.system(size: 19, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 42, height: 42)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .frame(width: 40, height: 40)
+                    .glassEffect(.regular, in: Circle())
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
@@ -175,10 +177,11 @@ struct AIChatView: View {
             .accessibilityIdentifier("ai.settings")
 
             Button(action: newConversation) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 27))
+                Image(systemName: "plus")
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
-                    .frame(width: 42, height: 42)
+                    .frame(width: 40, height: 40)
+                    .glassEffect(.regular, in: Circle())
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
@@ -193,9 +196,9 @@ struct AIChatView: View {
     /// 空状态标题：助手名放在“AI”的位置，名字两侧留空格，醒目一点。
     /// 用户没改过名字时保持“开始与 AI 对话”。
     private var emptyStateTitle: String {
-        if !FlyMailAI.hasReadyModel { return "AI 尚未配置" }
+        if !FlyMailAI.hasReadyModel { return L10n.t("AI 尚未配置") }
         let name = assistantName.trimmingCharacters(in: .whitespaces)
-        return (name.isEmpty || name == "FlyMail 助手") ? "开始与 AI 对话" : "开始与 \(name) 对话"
+        return (name.isEmpty || name == "FlyMail 助手") ? L10n.t("开始与 AI 对话") : L10n.t("开始与 %@ 对话", name)
     }
 
     private var mainContent: some View {
@@ -208,12 +211,12 @@ struct AIChatView: View {
                         systemImage: "sparkles",
                         description: Text(
                             FlyMailAI.hasReadyModel
-                            ? "可以直接提问，也可以添加图片或文件。邮件内容不会自动加入对话。"
-                            : "请先点击右上角齿轮，在 AI 设置中添加模型并保存 API Key。"
+                            ? L10n.t("可以直接提问，也可以添加图片或文件。邮件内容不会自动加入对话。")
+                            : L10n.t("请先点击右上角齿轮，在 AI 设置中添加模型并保存 API Key。")
                         )
                     )
                     if !FlyMailAI.hasReadyModel {
-                        Button("打开 AI 设置") { showAISettings = true }
+                        Button(L10n.t("打开 AI 设置")) { showAISettings = true }
                             .buttonStyle(.borderedProminent)
                             .padding(.top, 4)
                     }
@@ -232,7 +235,7 @@ struct AIChatView: View {
                             if sending {
                                 HStack(spacing: 8) {
                                     ProgressView()
-                                    Text("AI 正在思考…").foregroundStyle(.secondary)
+                                    Text(L10n.t("AI 正在思考…")).foregroundStyle(.secondary)
                                 }
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 8)
@@ -266,28 +269,37 @@ struct AIChatView: View {
 
     private func messageRow(_ message: AIChatMessage) -> some View {
         let isUser = message.role == "user"
-        return HStack(alignment: .top, spacing: 8) {
-            if isUser { Spacer(minLength: 24) }
+        return HStack(alignment: .top, spacing: 0) {
+            if isUser { Spacer(minLength: 20) }
 
-            // 微信式：头像贴着气泡，名称在头像这一侧的气泡上方（每条消息都有）
-            if showAvatar, !isUser { chatAvatar(isUser: false) }
-
-            VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
-                if showName {
-                    Text(isUser
-                         ? (myNickname.isEmpty ? "我" : myNickname)
-                         : (assistantName.isEmpty ? "AI 助手" : assistantName))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
+            VStack(alignment: isUser ? .trailing : .leading, spacing: 5) {
+                // 头像和名称在同一行（头像贴屏幕外侧），气泡在下面占整行——微信/QQ 的排版
+                if showAvatar || showName {
+                    HStack(spacing: 7) {
+                        if !isUser {
+                            if showAvatar { chatAvatar(isUser: false) }
+                            if showName { chatNameLabel(isUser: false) }
+                        } else {
+                            if showName { chatNameLabel(isUser: true) }
+                            if showAvatar { chatAvatar(isUser: true) }
+                        }
+                    }
+                    .padding(.horizontal, 4)
                 }
                 bubble(for: message)
             }
 
-            if showAvatar, isUser { chatAvatar(isUser: true) }
-
-            if !isUser { Spacer(minLength: 24) }
+            if !isUser { Spacer(minLength: 20) }
         }
+    }
+
+    private func chatNameLabel(isUser: Bool) -> some View {
+        Text(isUser
+             ? (myNickname.isEmpty ? "我" : myNickname)
+             : (assistantName.isEmpty ? "AI 助手" : assistantName))
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
     }
 
     private func bubble(for message: AIChatMessage) -> some View {
@@ -384,10 +396,10 @@ struct AIChatView: View {
                 Menu {
                     Section {
                         Button { showPhotoPicker = true } label: {
-                            Label("选择照片", systemImage: "photo")
+                            Label(L10n.t("选择照片"), systemImage: "photo")
                         }
                         Button { showFileImporter = true } label: {
-                            Label("添加文件", systemImage: "doc")
+                            Label(L10n.t("添加文件"), systemImage: "doc")
                         }
                     }
                 } label: {
@@ -461,15 +473,15 @@ struct AIChatView: View {
     /// “更多”菜单内容：切换模型 + 调思考等级（原先铺在输入框下方一整行，现在收进圆形按钮）。
     @ViewBuilder
     private var moreMenuContent: some View {
-        Section("模型") {
+        Section(L10n.t("模型")) {
             Button {
                 selectedProfileID = ""
                 reasoningLevel = .off
             } label: {
                 if selectedProfileID.isEmpty {
-                    Label("首选模型（自动回退）", systemImage: "checkmark")
+                    Label(L10n.t("首选模型（自动回退）"), systemImage: "checkmark")
                 } else {
-                    Text("首选模型（自动回退）")
+                    Text(L10n.t("首选模型（自动回退）"))
                 }
             }
             ForEach(profiles) { profile in
@@ -486,7 +498,7 @@ struct AIChatView: View {
             }
         }
         if let selectedProfile, FlyMailAI.canControlReasoning(selectedProfile) {
-            Section("思考等级") {
+            Section(L10n.t("思考等级")) {
                 ForEach(FlyMailAI.reasoningOptions(for: selectedProfile)) { level in
                     let title = FlyMailAI.reasoningTitle(level, for: selectedProfile)
                     Button {
@@ -501,8 +513,8 @@ struct AIChatView: View {
                 }
             }
         } else {
-            Section("思考等级") {
-                Text("当前模型不支持单独调整思考等级")
+            Section(L10n.t("思考等级")) {
+                Text(L10n.t("当前模型不支持单独调整思考等级"))
             }
         }
         if let selectedProfile, selectedProfile.provider == .gemini,
@@ -513,10 +525,10 @@ struct AIChatView: View {
 
     /// 输入框为空时把当前模型与思考等级展示在输入框里；开始输入（或已有附件）后让位给正常占位文案。
     private var composerPlaceholder: String {
-        guard input.isEmpty, draftAttachments.isEmpty else { return "发送消息…" }
-        guard let profile = selectedProfile else { return "发送消息…" }
+        guard input.isEmpty, draftAttachments.isEmpty else { return L10n.t("发送消息…") }
+        guard let profile = selectedProfile else { return L10n.t("发送消息…") }
         let reasoning = reasoningLevel == .off
-            ? "思考已关闭"
+            ? L10n.t("思考已关闭")
             : "思考 · \(FlyMailAI.reasoningTitle(reasoningLevel, for: profile))"
         return "\(profile.name) · \(reasoning)"
     }
@@ -524,7 +536,7 @@ struct AIChatView: View {
     private var historySidebar: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                Text("对话")
+                Text(L10n.t("对话"))
                     .font(.title2.bold())
                 Spacer(minLength: 0)
                 Button {
@@ -535,7 +547,7 @@ struct AIChatView: View {
                         isSelecting = true
                     }
                 } label: {
-                    Text(isSelecting ? "完成" : "编辑")
+                    Text(L10n.t(isSelecting ? "完成" : "编辑"))
                         .font(.subheadline.weight(.semibold))
                 }
                 .buttonStyle(.borderless)
@@ -552,7 +564,7 @@ struct AIChatView: View {
             .padding(.top, 58)
 
             Button(action: newConversation) {
-                Label("新建对话", systemImage: "plus")
+                Label(L10n.t("新建对话"), systemImage: "plus")
                     .font(.body.weight(.semibold))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14)
@@ -563,7 +575,7 @@ struct AIChatView: View {
 
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("搜索历史对话", text: $searchText)
+                TextField(L10n.t("搜索历史对话"), text: $searchText)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
             }
@@ -574,7 +586,7 @@ struct AIChatView: View {
                 HStack(spacing: 12) {
                     let allSelected = !activeConversations.isEmpty
                         && selectedConversationIDs.count >= activeConversations.count
-                    Button(allSelected ? "全不选" : "全选") {
+                    Button(allSelected ? L10n.t("全不选") : L10n.t("全选")) {
                         if allSelected {
                             selectedConversationIDs.removeAll()
                         } else {
@@ -583,7 +595,7 @@ struct AIChatView: View {
                     }
                     .font(.subheadline)
                     Spacer(minLength: 0)
-                    Text("已选 \(selectedConversationIDs.count)")
+                    Text(L10n.t("已选 %lld", selectedConversationIDs.count))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -600,18 +612,18 @@ struct AIChatView: View {
                                 Button(role: .destructive) {
                                     deleteConversation(conversation)
                                 } label: {
-                                    Label("删除", systemImage: "trash")
+                                    Label(L10n.t("删除"), systemImage: "trash")
                                 }
                                 Button {
                                     setArchived(conversation, archived: true)
                                 } label: {
-                                    Label("归档", systemImage: "archivebox")
+                                    Label(L10n.t("归档"), systemImage: "archivebox")
                                 }
                                 .tint(.blue)
                             }
                     }
                 } header: {
-                    Text(searchText.isEmpty ? "最近对话" : "搜索结果")
+                    Text(searchText.isEmpty ? L10n.t("最近对话") : L10n.t("搜索结果"))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
@@ -628,12 +640,12 @@ struct AIChatView: View {
                                         Button(role: .destructive) {
                                             deleteConversation(conversation)
                                         } label: {
-                                            Label("删除", systemImage: "trash")
+                                            Label(L10n.t("删除"), systemImage: "trash")
                                         }
                                         Button {
                                             setArchived(conversation, archived: false)
                                         } label: {
-                                            Label("恢复", systemImage: "tray.and.arrow.up")
+                                            Label(L10n.t("恢复"), systemImage: "tray.and.arrow.up")
                                         }
                                         .tint(.blue)
                                     }
@@ -644,7 +656,7 @@ struct AIChatView: View {
                             withAnimation(.easeInOut(duration: 0.18)) { showArchived.toggle() }
                         } label: {
                             Label(
-                                "已归档 \(archivedConversations.count)",
+                                L10n.t("已归档 %lld", archivedConversations.count),
                                 systemImage: showArchived ? "chevron.down" : "chevron.right"
                             )
                             .font(.caption.weight(.semibold))
@@ -661,7 +673,7 @@ struct AIChatView: View {
                     Button {
                         archiveSelected()
                     } label: {
-                        Label("归档所选", systemImage: "archivebox")
+                        Label(L10n.t("归档所选"), systemImage: "archivebox")
                     }
                     .buttonStyle(.bordered)
                     .disabled(selectedConversationIDs.isEmpty)
@@ -669,7 +681,7 @@ struct AIChatView: View {
                     Button(role: .destructive) {
                         deleteSelected()
                     } label: {
-                        Label("删除所选", systemImage: "trash")
+                        Label(L10n.t("删除所选"), systemImage: "trash")
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
@@ -680,7 +692,7 @@ struct AIChatView: View {
             } else {
                 HStack(spacing: 8) {
                     Image(systemName: "lock.shield").foregroundStyle(.secondary)
-                    Text("对话和记忆仅保存在本机")
+                    Text(L10n.t("对话和记忆仅保存在本机"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

@@ -1,4 +1,4 @@
-import SwiftUI
+﻿import SwiftUI
 
 /// 品牌图标：走 App 里现成的图标库链路（Oasisic → mini → 网站图标），
 /// 和邮件里的品牌头像同一套来源，不用系统图标凑数。
@@ -80,7 +80,7 @@ struct AboutSectionView: View {
             NavigationLink {
                 ProductInfoView()
             } label: {
-                LabeledContent("版本", value: "\(SettingsView.appVersion) (\(SettingsView.appBuild))")
+                LabeledContent(L10n.t("版本"), value: "\(SettingsView.appVersion) (\(SettingsView.appBuild))")
             }
         } header: { Text("关于") }
     }
@@ -140,7 +140,7 @@ struct ProductInfoView: View {
                         .foregroundStyle(.secondary)
                 }
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("新特性").font(.headline)
+                    Text(L10n.t("新特性")).font(.headline)
                     ForEach([
                         "AI 助手资料卡：可配置助手头像、名字、性别、年龄、MBTI、身高、体重、星座；资料作为人设注入对话，头像和名字用于聊天界面",
                         "AI 聊天微信式对话样式（可在聊天体验里开关显示头像/名称）：每条消息旁都有头像和名称——我方用“我的”页头像和昵称，AI 方用资料卡头像和助手名",
