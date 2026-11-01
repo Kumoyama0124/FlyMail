@@ -320,7 +320,7 @@ struct AIChatView: View {
                 }
                 .accessibilityLabel("添加图片或文件")
 
-                TextField("发送消息…", text: $input, axis: .vertical, prompt: Text(composerPlaceholder))
+                TextField("发送消息…", text: $input, prompt: Text(composerPlaceholder), axis: .vertical)
                     .lineLimit(1...5)
                     .focused($focused)
                     .submitLabel(enterToSend ? .send : .return)
@@ -602,8 +602,8 @@ struct AIChatView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                .padding(.bottom, 30)
             }
-            .padding(.bottom, 30)
         }
         .padding(.horizontal, 16)
     }
