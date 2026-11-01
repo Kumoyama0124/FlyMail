@@ -272,14 +272,16 @@ struct AIChatView: View {
         return HStack(alignment: .top, spacing: 8) {
             if isUser { Spacer(minLength: 20) }
 
-            // QQ 群聊式排版：头像独占左侧一列（顶部对齐），
-            // 昵称是头像右侧第一行，气泡紧贴在昵称下方（与昵称左/右对齐）
-            if showAvatar { chatAvatar(isUser: isUser) }
+            // QQ 群聊式排版，两侧互为镜像：AI 头像在左、我的头像在右（顶部对齐），
+            // 昵称是头像内侧第一行，气泡紧贴在昵称下方（与昵称对齐）
+            if showAvatar, !isUser { chatAvatar(isUser: false) }
 
             VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
                 if showName { chatNameLabel(isUser: isUser) }
                 bubble(for: message)
             }
+
+            if showAvatar, isUser { chatAvatar(isUser: true) }
 
             if !isUser { Spacer(minLength: 20) }
         }
