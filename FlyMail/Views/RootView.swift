@@ -46,6 +46,7 @@ struct RootView: View {
             // 邮件详情页有自己的底部栏，dock 让位给它。
             if sizeClass == .compact, showDock {
                 dockOverlay
+                    .zIndex(100)
             }
         }
         .background { BadgeUpdater() }

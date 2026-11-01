@@ -152,6 +152,9 @@ struct AIChatView: View {
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
+                .background {
+                    Circle().fill(.regularMaterial).glassEffect(.regular, in: Circle())
+                }
                 .accessibilityLabel("AI 设置")
                 .accessibilityIdentifier("ai.settings")
 
@@ -163,14 +166,11 @@ struct AIChatView: View {
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
+                .background {
+                    Circle().fill(.regularMaterial).glassEffect(.regular, in: Circle())
+                }
                 .accessibilityLabel("新建对话")
                 .accessibilityIdentifier("ai.newConversation")
-            }
-            .padding(5)
-            .background {
-                Capsule()
-                    .fill(.regularMaterial)
-                    .glassEffect(.regular, in: Capsule())
             }
         }
         .padding(.horizontal, 20)
@@ -633,10 +633,11 @@ struct AIChatView: View {
 
         // 已有自动摘要时，只发送最近 8 条原始消息；更早的上下文由本机长期记忆摘要承接。
         // 完整聊天记录仍保留在本地侧栏中，不会被删除。
+        let requestConversationID = currentConversationID
         let requestMessages: [AIChatMessage]
         if AIMemoryStore.isEnabled,
-           AIMemoryStore.compactedConversationID == (currentConversationID ?? ""),
-           AIMemoryStore.compactedCount > 0,
+           let requestConversationID,
+           AIMemoryStore.compactedCount(for: requestConversationID) > 0,
            messages.count > 8 {
             requestMessages = Array(messages.suffix(8))
         } else {
@@ -650,42 +651,52 @@ struct AIChatView: View {
                 let answer = try await FlyMailAI.chat(
                     messages: requestMessages,
                     profileID: requestProfileID,
-                    reasoning: requestReasoning
+                    reasoning: requestReasoning,
+                    memoryConversationID: requestConversationID
                 )
                 await MainActor.run {
-                    messages.append(AIChatMessage(role: "assistant", content: answer))
+                    let answerMessage = AIChatMessage(role: "assistant", content: answer)
+                    if currentConversationID == requestConversationID {
+                        messages.append(answerMessage)
+                        saveCurrentConversation()
+                        compactMemoryIfNeeded(conversationID: requestConversationID, conversationMessages: messages)
+                    } else if let requestConversationID,
+                              let index = conversations.firstIndex(where: { $0.id == requestConversationID }) {
+                        var completedMessages = conversations[index].messages
+                        completedMessages.append(answerMessage)
+                        saveConversation(id: requestConversationID, messages: completedMessages)
+                        compactMemoryIfNeeded(conversationID: requestConversationID, conversationMessages: completedMessages)
+                    }
                     sending = false
-                    saveCurrentConversation()
-                    compactMemoryIfNeeded()
                 }
             } catch {
                 let errorMessage = error.localizedDescription
                 await MainActor.run {
-                    self.error = errorMessage
+                    if currentConversationID == requestConversationID {
+                        self.error = errorMessage
+                    }
                     sending = false
-                    saveCurrentConversation()
                 }
             }
         }
     }
 
-    private func compactMemoryIfNeeded() {
+    private func compactMemoryIfNeeded(conversationID: String?, conversationMessages: [AIChatMessage]) {
         guard AIMemoryStore.isEnabled,
-              let conversationID = currentConversationID,
-              messages.count >= 20 else { return }
+              let conversationID,
+              conversationMessages.count >= 20 else { return }
 
-        let alreadyCompacted = AIMemoryStore.compactedConversationID == conversationID
-            ? AIMemoryStore.compactedCount : 0
-        guard messages.count - alreadyCompacted >= 12 else { return }
+        let alreadyCompacted = AIMemoryStore.compactedCount(for: conversationID)
+        guard conversationMessages.count - alreadyCompacted >= 12 else { return }
 
-        let boundary = max(0, messages.count - 8)
+        let boundary = max(0, conversationMessages.count - 8)
         guard boundary > 0 else { return }
-        let oldMessages = Array(messages.prefix(boundary))
-        let count = messages.count
+        let oldMessages = Array(conversationMessages.prefix(boundary))
+        let count = conversationMessages.count
 
         Task {
             do {
-                let summary = try await FlyMailAI.compactMemory(messages: oldMessages)
+                let summary = try await FlyMailAI.compactMemory(messages: oldMessages, conversationID: conversationID)
                 await MainActor.run {
                     AIMemoryStore.saveSummary(summary, compactedCount: count, conversationID: conversationID)
                 }

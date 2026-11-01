@@ -285,9 +285,16 @@ enum AIModelStore {
 
 enum AIMemoryStore {
     static let enabledKey = "ai.memory.enabled"
-    private static let summaryKey = "ai.memory.summary"
-    private static let compactedCountKey = "ai.memory.compactedCount"
-    private static let compactedConversationKey = "ai.memory.compactedConversationID"
+    private static let recordsKey = "ai.memory.records.v1"
+    // 保留旧 key，只在升级时将已存在的摘要迁移到它所属的会话。
+    private static let legacySummaryKey = "ai.memory.summary"
+    private static let legacyCompactedCountKey = "ai.memory.compactedCount"
+    private static let legacyCompactedConversationKey = "ai.memory.compactedConversationID"
+
+    private struct Record: Codable {
+        var summary: String
+        var compactedCount: Int
+    }
 
     static var isEnabled: Bool {
         get {
@@ -297,28 +304,57 @@ enum AIMemoryStore {
         set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
     }
 
-    static var summary: String {
-        UserDefaults.standard.string(forKey: summaryKey) ?? ""
+    private static func records() -> [String: Record] {
+        let defaults = UserDefaults.standard
+        if let data = defaults.data(forKey: recordsKey),
+           let records = try? JSONDecoder().decode([String: Record].self, from: data) {
+            return records
+        }
+
+        // v1 只保存一份摘要；它实际属于最后被压缩的会话，不能把它暴露给所有会话。
+        let legacyConversationID = defaults.string(forKey: legacyCompactedConversationKey) ?? ""
+        let legacySummary = defaults.string(forKey: legacySummaryKey) ?? ""
+        guard !legacyConversationID.isEmpty, !legacySummary.isEmpty else { return [:] }
+        let migrated = [legacyConversationID: Record(
+            summary: legacySummary,
+            compactedCount: defaults.integer(forKey: legacyCompactedCountKey)
+        )]
+        saveRecords(migrated)
+        defaults.removeObject(forKey: legacySummaryKey)
+        defaults.removeObject(forKey: legacyCompactedCountKey)
+        defaults.removeObject(forKey: legacyCompactedConversationKey)
+        return migrated
     }
 
-    static var compactedCount: Int {
-        UserDefaults.standard.integer(forKey: compactedCountKey)
+    private static func saveRecords(_ records: [String: Record]) {
+        guard let data = try? JSONEncoder().encode(records) else { return }
+        UserDefaults.standard.set(data, forKey: recordsKey)
     }
 
-    static var compactedConversationID: String {
-        UserDefaults.standard.string(forKey: compactedConversationKey) ?? ""
+    static func summary(for conversationID: String?) -> String {
+        guard let conversationID else { return "" }
+        return records()[conversationID]?.summary ?? ""
+    }
+
+    static func compactedCount(for conversationID: String) -> Int {
+        records()[conversationID]?.compactedCount ?? 0
+    }
+
+    static var hasMemories: Bool {
+        records().values.contains { !$0.summary.isEmpty }
     }
 
     static func saveSummary(_ value: String, compactedCount: Int, conversationID: String) {
-        UserDefaults.standard.set(value, forKey: summaryKey)
-        UserDefaults.standard.set(compactedCount, forKey: compactedCountKey)
-        UserDefaults.standard.set(conversationID, forKey: compactedConversationKey)
+        var updated = records()
+        updated[conversationID] = Record(summary: value, compactedCount: compactedCount)
+        saveRecords(updated)
     }
 
     static func clear() {
-        UserDefaults.standard.removeObject(forKey: summaryKey)
-        UserDefaults.standard.removeObject(forKey: compactedCountKey)
-        UserDefaults.standard.removeObject(forKey: compactedConversationKey)
+        UserDefaults.standard.removeObject(forKey: recordsKey)
+        UserDefaults.standard.removeObject(forKey: legacySummaryKey)
+        UserDefaults.standard.removeObject(forKey: legacyCompactedCountKey)
+        UserDefaults.standard.removeObject(forKey: legacyCompactedConversationKey)
     }
 }
 
@@ -329,7 +365,7 @@ enum AIPersonalization {
     static let instructionKey = "ai.persona.instruction"
     static let enterToSendKey = "ai.chat.enterToSend"
 
-    static var systemPrompt: String {
+    static func systemPrompt(memory: String = "") -> String {
         let defaults = UserDefaults.standard
         let name = defaults.string(forKey: nameKey) ?? "FlyMail 助手"
         let language = defaults.string(forKey: languageKey) ?? "auto"
@@ -362,8 +398,8 @@ enum AIPersonalization {
         if !customInstruction.isEmpty {
             parts.append("用户补充的个性化要求：\n\(customInstruction)")
         }
-        if AIMemoryStore.isEnabled, !AIMemoryStore.summary.isEmpty {
-            parts.append("从之前对话中提炼的长期记忆（只作为上下文参考；如与用户本轮新信息冲突，以本轮为准）：\n\(AIMemoryStore.summary)")
+        if AIMemoryStore.isEnabled, !memory.isEmpty {
+            parts.append("当前对话中提炼的长期记忆（只作为上下文参考；如与用户本轮新信息冲突，以本轮为准）：\n\(memory)")
         }
         return parts.joined(separator: "\n\n")
     }
@@ -456,14 +492,15 @@ enum FlyMailAI {
     static func chat(
         messages: [AIChatMessage],
         profileID: String? = nil,
-        reasoning: AIReasoningLevel? = nil
+        reasoning: AIReasoningLevel? = nil,
+        memoryConversationID: String? = nil
     ) async throws -> String {
         let profiles = AIModelStore.loadProfiles()
         guard !profiles.isEmpty else { throw AIError.noProfiles }
 
         if let profileID, let selected = profiles.first(where: { $0.id == profileID }) {
             let key = KeychainStore.get(AIModelStore.keychainKey(for: selected.id)) ?? ""
-            return try await chat(profile: selected, apiKey: key, messages: messages, reasoning: reasoning)
+            return try await chat(profile: selected, apiKey: key, messages: messages, reasoning: reasoning, memoryConversationID: memoryConversationID)
         }
 
         let primaryID = AIModelStore.primaryProfileID
@@ -482,7 +519,7 @@ enum FlyMailAI {
             }
             hadUsableKey = true
             do {
-                return try await chat(profile: profile, apiKey: key, messages: messages, reasoning: reasoning)
+                return try await chat(profile: profile, apiKey: key, messages: messages, reasoning: reasoning, memoryConversationID: memoryConversationID)
             } catch {
                 failures.append("\(profile.name)：\(error.localizedDescription)")
             }
@@ -492,7 +529,7 @@ enum FlyMailAI {
         throw AIError.allModelsFailed(failures.joined(separator: "\n"))
     }
 
-    static func compactMemory(messages: [AIChatMessage]) async throws -> String {
+    static func compactMemory(messages: [AIChatMessage], conversationID: String) async throws -> String {
         guard let profile = primaryProfile() else { throw AIError.noProfiles }
         let key = KeychainStore.get(AIModelStore.keychainKey(for: profile.id)) ?? ""
         let prompt = """
@@ -501,7 +538,7 @@ enum FlyMailAI {
         删除寒暄、临时问题、重复内容和过时信息；不要写入密码、API Key、令牌、验证码或其他秘密。
         使用简体中文，按主题分组，控制在 1200 个汉字以内。只输出整理后的记忆正文。
         """
-        let existingMemory = AIMemoryStore.summary
+        let existingMemory = AIMemoryStore.summary(for: conversationID)
         let existingContext = existingMemory.isEmpty ? "" : "已有长期记忆：\n\(existingMemory)\n\n"
         let source = existingContext + messages.map { "\($0.role == "user" ? "用户" : "助手")：\($0.content)" }
             .joined(separator: "\n\n")
@@ -523,7 +560,8 @@ enum FlyMailAI {
         apiKey: String,
         messages: [AIChatMessage],
         reasoning: AIReasoningLevel? = nil,
-        includeMemory: Bool = true
+        includeMemory: Bool = true,
+        memoryConversationID: String? = nil
     ) async throws -> String {
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { throw AIError.missingKey }
@@ -533,7 +571,7 @@ enum FlyMailAI {
 
         var requestMessages = messages
         if includeMemory {
-            let prompt = AIPersonalization.systemPrompt
+            let prompt = AIPersonalization.systemPrompt(memory: AIMemoryStore.summary(for: memoryConversationID))
             if let systemIndex = requestMessages.firstIndex(where: { $0.role == "system" }) {
                 requestMessages[systemIndex].content = prompt + "\n\n" + requestMessages[systemIndex].content
             } else {

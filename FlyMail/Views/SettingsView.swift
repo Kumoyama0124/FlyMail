@@ -333,8 +333,6 @@ struct AISettingsView: View {
     @State private var pendingDeleteID: String?
     @State private var confirmDelete = false
     @State private var isEditing = false
-    @State private var memorySummary = AIMemoryStore.summary
-
     @AppStorage("ai.translationProfileID") private var translationProfileID = ""
     @AppStorage(AIPersonalization.enterToSendKey) private var enterToSend = false
     @AppStorage(AIMemoryStore.enabledKey) private var memoryEnabled = true
@@ -476,24 +474,17 @@ struct AISettingsView: View {
                 }
                 .padding(.vertical, 5)
 
-                if memorySummary.isEmpty {
-                    Text("目前还没有整理出的长期记忆。整理过程在后台完成，不会弹出打断对话的窗口。")
+                if AIMemoryStore.hasMemories {
+                    Text("已为部分对话整理记忆。每条对话的记忆相互隔离，仅用于同一条对话的后续请求。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 } else {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("当前记忆")
-                            .font(.subheadline.weight(.semibold))
-                        Text(memorySummary)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                    }
+                    Text("目前还没有整理出的长期记忆。整理过程在后台完成，不会弹出打断对话的窗口。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
-                Button("刷新记忆预览") { memorySummary = AIMemoryStore.summary }
                 Button("清空长期记忆", role: .destructive) {
                     AIMemoryStore.clear()
-                    memorySummary = ""
                 }
             } header: {
                 Text("AI 记忆")
@@ -519,7 +510,6 @@ struct AISettingsView: View {
         }
         .onAppear {
             reload()
-            memorySummary = AIMemoryStore.summary
         }
         .onChange(of: primaryID) { _, newValue in
             AIModelStore.setPrimaryProfileID(newValue)
@@ -574,7 +564,7 @@ struct AISettingsView: View {
 
             VStack(alignment: .trailing, spacing: 5) {
                 if profile.id == primaryID {
-                    Text("首选").font(.caption2.weight(.semibold)).foregroundColor(.accentColor)
+                    Text("首选").font(.caption2.weight(.semibold)).foregroundColor(.cyan)
                 }
                 if profile.isFallback && profile.id != primaryID {
                     Text("备用").font(.caption2).foregroundColor(.secondary)
