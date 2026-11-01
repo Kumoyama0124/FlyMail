@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AIChatView: View {
+    var initialPrompt: String? = nil
     @State private var messages: [AIChatMessage] = []
     @State private var input = ""
     @State private var sending = false
@@ -48,6 +49,7 @@ struct AIChatView: View {
                 }.padding()
             }
             .navigationTitle("AI")
+            .onAppear { if let initialPrompt, input.isEmpty { input = initialPrompt } }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { messages.removeAll(); error = nil } label: { Image(systemName: "plus") }
