@@ -86,7 +86,7 @@ struct RootView: View {
         if p == .active {
             Task { await MailSyncService(modelContainer: context.container).syncAll() }
             IdleManager.shared.start(container: context.container)
-            Task { await AutoReplyService(modelContainer: context.container).processIfNeeded() }
+            Task { await AutoReplyService(container: context.container).processIfNeeded() }
         } else if p == .background {
             IdleManager.shared.stop()
         }
@@ -95,7 +95,7 @@ struct RootView: View {
     private func flushOutboxAndProcessAutoReply() {
         Task {
             await OutboxService(modelContainer: context.container).flushDue()
-            await AutoReplyService(modelContainer: context.container).processIfNeeded()
+            await AutoReplyService(container: context.container).processIfNeeded()
         }
     }
 
