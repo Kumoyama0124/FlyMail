@@ -74,20 +74,28 @@ struct RootView: View {
         .onChange(of: syncInterval) { _, _ in IdleManager.shared.restart(container: context.container) }
         .onChange(of: accounts.count) { _, _ in IdleManager.shared.start(container: context.container) }
         .onReceive(outboxTimer) { _ in
-            Task {
-                await OutboxService(modelContainer: context.container).flushDue()
-                await AutoReplyService(modelContainer: context.container).processIfNeeded()
-            }
+            flushOutboxAndProcessAutoReply()
         }
         .onChange(of: phase) { _, p in
-            if p == .active {
-                Task { await MailSyncService(modelContainer: context.container).syncAll() }
-                IdleManager.shared.start(container: context.container)
-                // 自动回复（默认关闭）：同步完扫一遍 24h 内的新邮件
-                Task { await AutoReplyService(modelContainer: context.container).processIfNeeded() }
-            } else if p == .background {
-                IdleManager.shared.stop()
-            }
+            handleScenePhase(p)
+        }
+    }
+
+    /// 前台回切：全量同步 + IDLE 续命 + 自动回复扫描（默认关闭，开关没开时自动跳过）
+    private func handleScenePhase(_ p: ScenePhase) {
+        if p == .active {
+            Task { await MailSyncService(modelContainer: context.container).syncAll() }
+            IdleManager.shared.start(container: context.container)
+            Task { await AutoReplyService(modelContainer: context.container).processIfNeeded() }
+        } else if p == .background {
+            IdleManager.shared.stop()
+        }
+    }
+
+    private func flushOutboxAndProcessAutoReply() {
+        Task {
+            await OutboxService(modelContainer: context.container).flushDue()
+            await AutoReplyService(modelContainer: context.container).processIfNeeded()
         }
     }
 

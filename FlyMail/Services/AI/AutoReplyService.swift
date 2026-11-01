@@ -205,7 +205,7 @@ struct AutoReplyService {
         draft.inReplyTo = message.messageID
 
         let outbox = OutboxService(modelContainer: container)
-        try outbox.enqueue(draft, accountID: account.id, sendAt: .now)
+        try await outbox.enqueue(draft, accountID: account.id, sendAt: .now)
         AutoReplyStore.markResponded(message.messageID)
         AutoReplyStore.recordSend(to: MIMEParser.addresses(message.from).first?.lowercased() ?? message.from)
         await outbox.flushDue()
