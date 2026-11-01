@@ -6,6 +6,7 @@ import SwiftData
 struct HomeView: View {
     @Environment(AppState.self) private var app
     @Environment(\.modelContext) private var context
+    @Environment(\.colorScheme) private var colorScheme
     @Query(sort: \Account.createdAt) private var accounts: [Account]
     @Query private var allMessages: [MailMessage]
     @AppStorage(Prefs.myNickname) private var nickname = ""
@@ -48,7 +49,7 @@ struct HomeView: View {
                         }
                         Spacer()
                     }
-                    .padding().background { RoundedRectangle(cornerRadius: 20).fill(.white).overlay { RoundedRectangle(cornerRadius: 20).stroke(.black.opacity(0.06), lineWidth: 0.5) } }.shadow(color: .black.opacity(0.06), radius: 10, y: 2)
+                    .padding().background { RoundedRectangle(cornerRadius: 20).fill(Color(uiColor: .systemBackground)).overlay { RoundedRectangle(cornerRadius: 20).stroke(Color.primary.opacity(0.06), lineWidth: 0.5) } }.shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.06), radius: 10, y: 2)
 
                     // 统计
                     HStack(spacing: 12) {
@@ -117,7 +118,7 @@ struct HomeView: View {
             Text(label).font(.caption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 12)
-        .background { RoundedRectangle(cornerRadius: 16).fill(.white).overlay { RoundedRectangle(cornerRadius: 16).stroke(.black.opacity(0.06), lineWidth: 0.5) } }.shadow(color: .black.opacity(0.06), radius: 8, y: 2)
+        .background { RoundedRectangle(cornerRadius: 16).fill(Color(uiColor: .systemBackground)).overlay { RoundedRectangle(cornerRadius: 16).stroke(Color.primary.opacity(0.06), lineWidth: 0.5) } }.shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.08), radius: 8, y: 2)
     }
 
     private func shortcut(_ title: String, _ icon: String, _ mailbox: AppState.Mailbox) -> some View {
@@ -136,7 +137,7 @@ struct HomeView: View {
             }.padding()
         }
         .buttonStyle(.plain)
-        .background { RoundedRectangle(cornerRadius: 16).fill(.white).overlay { RoundedRectangle(cornerRadius: 16).stroke(.black.opacity(0.06), lineWidth: 0.5) } }.shadow(color: .black.opacity(0.06), radius: 8, y: 2)
+        .background { RoundedRectangle(cornerRadius: 16).fill(Color(uiColor: .systemBackground)).overlay { RoundedRectangle(cornerRadius: 16).stroke(Color.primary.opacity(0.06), lineWidth: 0.5) } }.shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.08), radius: 8, y: 2)
     }
 
     private func openAccount(_ a: Account) {
