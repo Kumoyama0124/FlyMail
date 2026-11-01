@@ -325,10 +325,99 @@ struct SpamSettingsView: View {
     private func reload() { block = SpamFilter.blockList; allow = SpamFilter.allowList }
 }
 
-/// AI 设置：先留一个入口，暂不提供二级设置。
+/// AI 设置：OpenAI 兼容接口，配置由用户决定。
 struct AISettingsView: View {
+    @AppStorage("ai.baseURL") private var baseURL = "https://api.openai.com/v1"
+    @AppStorage("ai.model") private var model = ""
+    @State private var apiKey = KeychainStore.get("ai.apiKey") ?? ""
+    @State private var testing = false
+    @State private var status: String?
+    @State private var statusOK = false
+
     var body: some View {
-        ContentUnavailableView("AI 暂未启用", systemImage: "sparkles")
-            .navigationTitle("AI")
+        Form {
+            Section("兼容 OpenAI API") {
+                TextField("API Base URL", text: $baseURL)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.URL)
+                    .autocorrectionDisabled()
+                TextField("模型名称", text: $model)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                SecureField("API Key", text: $apiKey)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Button("保存配置") {
+                    UserDefaults.standard.set(baseURL.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "ai.baseURL")
+                    UserDefaults.standard.set(model.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "ai.model")
+                    KeychainStore.set(apiKey, for: "ai.apiKey")
+                    statusOK = true
+                    status = "配置已保存在本机。API Key 存储于 iOS Keychain。"
+                }
+                Button {
+                    testing = true
+                    status = nil
+                    Task {
+                        let result = await OpenAICompatibleAI.testConnection(baseURL: baseURL, apiKey: apiKey, model: model)
+                        await MainActor.run {
+                            testing = false
+                            statusOK = result.ok
+                            status = result.message
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Text("测试连接")
+                        Spacer()
+                        if testing { ProgressView() }
+                    }
+                }.disabled(testing || baseURL.isEmpty || apiKey.isEmpty || model.isEmpty)
+                if let status {
+                    Text(status).font(.footnote).foregroundStyle(statusOK ? .green : .secondary)
+                }
+            } footer: {
+                Text("支持任何兼容 OpenAI Chat Completions API 的服务。请求由设备通过 HTTPS 直接发送至你填写的服务地址；FlyMail 不提供代理服务器。")
+            }
+            Section("隐私") {
+                Label("API Key 保存在本机 Keychain", systemImage: "lock.shield")
+                Label("不会上传到 FlyMail 服务器", systemImage: "iphone")
+                Label("邮件内容仅在主动调用 AI 时发送", systemImage: "hand.tap")
+            }
+        }
+        .navigationTitle("AI")
+        .onAppear {
+            model = UserDefaults.standard.string(forKey: "ai.model") ?? ""
+            baseURL = UserDefaults.standard.string(forKey: "ai.baseURL") ?? "https://api.openai.com/v1"
+        }
+    }
+}
+
+enum OpenAICompatibleAI {
+    struct TestResult { let ok: Bool; let message: String }
+
+    static func testConnection(baseURL: String, apiKey: String, model: String) async -> TestResult {
+        guard let base = URL(string: baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")).appending("/")) else {
+            return TestResult(ok: false, message: "API Base URL 格式无效")
+        }
+        let endpoint = base.appending(path: "chat/completions")
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 30
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "model": model, "messages": [["role": "user", "content": "Reply with OK"]], "max_tokens": 8
+        ])
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else { return TestResult(ok: false, message: "未收到有效 HTTP 响应") }
+            if (200..<300).contains(http.statusCode) {
+                return TestResult(ok: true, message: "连接成功，模型 API 可用")
+            }
+            let body = String(data: data, encoding: .utf8) ?? ""
+            return TestResult(ok: false, message: "HTTP \(http.statusCode)：\(String(body.prefix(240)))")
+        } catch {
+            return TestResult(ok: false, message: "连接失败：\(error.localizedDescription)")
+        }
     }
 }
