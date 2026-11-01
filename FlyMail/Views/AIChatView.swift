@@ -615,6 +615,24 @@ struct AIChatView: View {
         AIConversationStore.save(conversations)
     }
 
+    private func saveConversation(id: String, messages savedMessages: [AIChatMessage]) {
+        let firstUserText = savedMessages.first(where: { $0.role == "user" })?.content ?? ""
+        let title = String(firstUserText.trimmingCharacters(in: .whitespacesAndNewlines).prefix(32))
+        let conversation = AIConversation(
+            id: id,
+            title: title.isEmpty ? "新对话" : title,
+            messages: savedMessages,
+            updatedAt: .now
+        )
+        if let index = conversations.firstIndex(where: { $0.id == id }) {
+            conversations[index] = conversation
+        } else {
+            conversations.insert(conversation, at: 0)
+        }
+        conversations.sort { $0.updatedAt > $1.updatedAt }
+        AIConversationStore.save(conversations)
+    }
+
     private func send() {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard (!text.isEmpty || !draftAttachments.isEmpty), !sending, !loadingAttachments else { return }
