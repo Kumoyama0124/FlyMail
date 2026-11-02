@@ -18,7 +18,7 @@ struct ProviderPreset: Identifiable, Hashable {
         "gmail": ("gmail.com", "G", (0.86, 0.27, 0.22)), "outlook": ("outlook.com", "M", (0.0, 0.47, 0.84)),
         "icloud": ("icloud.com", "", (0.25, 0.6, 0.95)), "qq": ("qq.com", "Q", (0.12, 0.6, 0.95)),
         "aliyun": ("aliyun.com", "阿", (1.0, 0.42, 0.0)), "163": ("163.com", "163", (0.85, 0.15, 0.15)),
-        "126": ("126.com", "126", (0.2, 0.62, 0.35)), "sohu": ("sohu.com", "搜", (0.95, 0.75, 0.1)),
+        "126": ("126.com", "126", (0.2, 0.62, 0.35)), "yeah": ("yeah.net", "Yeah", (0.2, 0.62, 0.35)), "sohu": ("sohu.com", "搜", (0.95, 0.75, 0.1)),
         "sina": ("sina.com.cn", "浪", (0.9, 0.2, 0.15)), "139": ("139.com", "139", (0.0, 0.55, 0.85)),
         "189": ("189.cn", "189", (0.0, 0.45, 0.8)),
         // 沃邮箱：图标走中国联通 APP 图标（AvatarService 里先拉 App Store 官方图），不再用“沃”字标；
@@ -33,6 +33,7 @@ struct ProviderPreset: Identifiable, Hashable {
         .init(id: "qq", name: "腾讯 QQ", imapHost: "imap.qq.com", imapPort: 993, smtpHost: "smtp.qq.com", smtpPort: 465, oauth: nil, passwordHint: "填写 QQ 邮箱“授权码”，不是 QQ 密码"),
         .init(id: "163", name: "网易 163", imapHost: "imap.163.com", imapPort: 993, smtpHost: "smtp.163.com", smtpPort: 465, oauth: nil, passwordHint: "填写网易邮箱“授权码”"),
         .init(id: "126", name: "网易 126", imapHost: "imap.126.com", imapPort: 993, smtpHost: "smtp.126.com", smtpPort: 465, oauth: nil, passwordHint: "填写网易邮箱“授权码”"),
+        .init(id: "yeah", name: "网易 Yeah", imapHost: "imap.yeah.net", imapPort: 993, smtpHost: "smtp.yeah.net", smtpPort: 465, oauth: nil, passwordHint: "填写网易邮箱“授权码”"),
         .init(id: "icloud", name: "iCloud", imapHost: "imap.mail.me.com", imapPort: 993, smtpHost: "smtp.mail.me.com", smtpPort: 587, oauth: nil, passwordHint: "在 appleid.apple.com 生成 App 专用密码"),
         .init(id: "sina", name: "新浪", imapHost: "imap.sina.com", imapPort: 993, smtpHost: "smtp.sina.com", smtpPort: 465, oauth: nil, passwordHint: "需在网页版开启 IMAP/SMTP，填写授权码"),
         .init(id: "139", name: "139 邮箱", imapHost: "imap.139.com", imapPort: 993, smtpHost: "smtp.139.com", smtpPort: 465, oauth: nil, passwordHint: "需开启 IMAP/SMTP，填写授权码"),
@@ -54,6 +55,7 @@ struct ProviderPreset: Identifiable, Hashable {
         case "qq.com", "foxmail.com", "vip.qq.com": return preset("qq")
         case "163.com": return preset("163")
         case "126.com": return preset("126")
+        case "yeah.net": return preset("yeah")
         case "icloud.com", "me.com", "mac.com": return preset("icloud")
         case "sina.com", "sina.cn": return preset("sina")
         case "139.com": return preset("139")

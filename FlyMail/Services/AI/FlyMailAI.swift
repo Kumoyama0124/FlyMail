@@ -164,7 +164,7 @@ enum AIProvider: String, CaseIterable, Identifiable {
         case .zhipu: "glm-4.5-air"
         case .qwen: "qwen-plus"
         case .kimi: "kimi-k2.6"
-        case .deepSeek: "deepseek-v4-flash"
+        case .deepSeek: "deepseek-flash"
         case .custom: ""
         }
     }
@@ -570,7 +570,8 @@ enum FlyMailAI {
             // K2.7 Code is thinking-only and does not expose a documented off switch here.
             return []
         case .deepSeek:
-            if model.contains("deepseek-v4") || model.contains("deepseek-v3.2") {
+            // deepseek-flash（现行名称）与旧版 deepseek-v4 / v3.2 命名都支持
+            if model.contains("deepseek-flash") || model.contains("deepseek-v4") || model.contains("deepseek-v3.2") {
                 return [.off, .low, .high, .max]
             }
             return []
