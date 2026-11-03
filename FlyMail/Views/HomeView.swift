@@ -167,17 +167,6 @@ struct HomeView: View {
     }
 }
 
-/// AI：暂时不启用，现在就是个空页。
-struct AIPlaceholderView: View {
-    var body: some View {
-        NavigationStack {
-            ContentUnavailableView("AI 暂未启用", systemImage: "sparkles",
-                                   description: Text("AI 功能还在准备中，这里先留空。"))
-                .navigationTitle("AI")
-        }
-    }
-}
-
 /// 首页快捷入口编辑：已选的可拖动排序、左滑删除；未选的点“+”加进来；一键恢复默认。
 struct HomeShortcutEditView: View {
     @AppStorage(Prefs.homeShortcuts) private var raw = Prefs.defaultHomeShortcuts
