@@ -28,10 +28,6 @@ struct MessageDetailView: View {
     @State private var attachmentURLs: [String: URL] = [:]
 
     @State private var confirmDelete = false
-    @State private var aiPrompt = ""
-    /// 邮件内 AI 快捷结果（摘要/要点/翻译）：完成后以卡片弹出，可直接复制
-    @State private var aiResult: AIQuickResult?
-    @State private var aiBusy = false
 
     var body: some View {
         ScrollView {
@@ -59,17 +55,7 @@ struct MessageDetailView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .overlay(alignment: .bottom) { bottomBar }
-        .overlay {
-            if aiBusy {
-                VStack(spacing: 10) {
-                    ProgressView()
-                    Text(L10n.t("AI 处理中…")).font(.callout).foregroundStyle(.secondary)
-                }
-                .padding(24)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .shadow(color: .black.opacity(0.12), radius: 18, y: 6)
-            }
-        }
+
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) { navCapsule }
             ToolbarItem(placement: .topBarTrailing) {
@@ -86,13 +72,7 @@ struct MessageDetailView: View {
         .task(id: message.persistentModelID) { await load(); refreshAttachmentURLs() }
         .sheet(item: $moving) { MoveFolderPicker(message: $0) }
         .sheet(item: $previewURL) { QuickLookView(url: $0).ignoresSafeArea() }
-        .sheet(isPresented: Binding(get: { !aiPrompt.isEmpty }, set: { if !$0 { aiPrompt = "" } })) { AIChatView(initialPrompt: aiPrompt) }
-        .sheet(item: $aiResult) { result in
-            AIQuickResultSheet(result: result)
-        }
-        .confirmationDialog(isTrashLike ? "永久删除这封邮件？" : "删除这封邮件？", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("删除", role: .destructive) { deleteCurrent() }
-        }
+
     }
 
     private var isTrashLike: Bool { ["trash", "junk"].contains(message.folder?.role ?? "") }
@@ -123,24 +103,7 @@ struct MessageDetailView: View {
                 barButton("trash") { confirmDelete = true }
                 barButton("folder") { moving = message }
                 Menu {
-                    Button { runAIQuick(title: "AI 摘要", prompt: "请用简体中文总结这封邮件的核心内容，控制在 3 句话以内，直接输出摘要正文。\n\n主题：\(message.subject)\n发件人：\(message.from)\n\n\(mailContentForAI)") } label: {
-                        Label("AI 摘要", systemImage: "sparkle.magnifyingglass")
-                    }
-                    Button { runAIQuick(title: "提取要点", prompt: "请从下面这封邮件中提取需要我关注的信息：待办事项、时间地点、金额数字、需要我回答或执行的内容。用简体中文列成清单；没有的类别不要硬凑。\n\n主题：\(message.subject)\n发件人：\(message.from)\n\n\(mailContentForAI)") } label: {
-                        Label("提取要点", systemImage: "list.bullet.rectangle")
-                    }
-                    Button { runAIQuick(title: "AI 翻译为中文", prompt: "请将以下邮件完整翻译为简体中文，保留原意、格式和专有名词，直接输出译文。\n\n主题：\(message.subject)\n\n\(mailContentForAI)") } label: {
-                        Label("AI 翻译为中文", systemImage: "translate")
-                    }
-                    Button { draftReplyWithAI() } label: {
-                        Label("AI 起草回复", systemImage: "text.bubble")
-                    }
-                    Divider()
-                    Button { openAI("我想针对这封邮件继续讨论，请先帮我记住它的内容：\n\n主题：\(message.subject)\n发件人：\(message.from)\n\n\(mailContentForAI)") } label: {
-                        Label(L10n.t("在 AI 对话中深入"), systemImage: "bubble.left.and.text.bubble.right")
-                    }
-                    Divider()
-                    Button("回复", systemImage: "arrowshape.turn.up.left") { reply(all: false) }
+Button("回复", systemImage: "arrowshape.turn.up.left") { reply(all: false) }
                     Button("全部回复", systemImage: "arrowshape.turn.up.left.2") { reply(all: true) }
                     Button("转发", systemImage: "arrowshape.turn.up.right") { forward() }
                 } label: {
@@ -161,53 +124,6 @@ struct MessageDetailView: View {
             .glassEffect(.regular.interactive(), in: Circle())
         }
         .padding(.horizontal, 18).padding(.bottom, 8)
-    }
-
-    private func openAI(_ prompt: String) { aiPrompt = prompt }
-
-    /// 给 AI 的正文：正文已加载用全文，否则退回摘要片段，避免发出去是空的
-    private var mailContentForAI: String {
-        let body = message.bodyLoaded ? message.bodyText : message.snippet
-        return body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "（正文未加载，仅有摘要：\(message.snippet)）"
-            : body
-    }
-
-    /// 邮件页内的 AI 快捷操作：结果以卡片弹出（不跳聊天页），可直接复制或接着起草回复
-    private func runAIQuick(title: String, prompt: String) {
-        guard !aiBusy else { return }
-        aiBusy = true
-        Task {
-            do {
-                let text = try await FlyMailAI.chat(messages: [AIChatMessage(role: "user", content: prompt)])
-                aiResult = AIQuickResult(title: title, text: text)
-            } catch {
-                app.lastError = error.localizedDescription
-            }
-            aiBusy = false
-        }
-    }
-
-    /// AI 起草回复：生成的正文直接填进写信页（带原信引用），改完就能发
-    private func draftReplyWithAI() {
-        guard !aiBusy else { return }
-        aiBusy = true
-        let prompt = "请根据下面这封邮件，用简体中文起草一封回复。语气礼貌、简洁、专业；只输出回复正文本身，不要输出主题行，不要用引号包裹，不要编造用户没提过的事实。\n\n主题：\(message.subject)\n发件人：\(message.from)\n\n\(mailContentForAI)"
-        Task {
-            do {
-                let text = try await FlyMailAI.chat(messages: [AIChatMessage(role: "user", content: prompt)])
-                let acc = message.folder?.account
-                var d = ComposeDraft(accountID: acc?.id)
-                d.to = message.from
-                d.subject = message.subject.lowercased().hasPrefix("re:") ? message.subject : "Re: \(message.subject)"
-                d.body = text + (acc?.signature ?? "") + quoted
-                d.inReplyTo = message.messageID
-                app.composeDraft = d
-            } catch {
-                app.lastError = error.localizedDescription
-            }
-            aiBusy = false
-        }
     }
 
     private func barButton(_ icon: String, action: @escaping () -> Void) -> some View {
@@ -383,68 +299,3 @@ struct MessageDetailView: View {
 }
 
 extension URL: Identifiable { public var id: String { absoluteString } }
-
-/// 邮件页 AI 快捷结果（摘要/要点/翻译）
-struct AIQuickResult: Identifiable {
-    let id = UUID()
-    let title: String
-    let text: String
-}
-
-struct AIQuickResultSheet: View {
-    let result: AIQuickResult
-    @Environment(\.dismiss) private var dismiss
-    @State private var copied = false
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text(result.text)
-                        .font(.callout)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                    HStack(spacing: 10) {
-                        Button {
-                            UIPasteboard.general.string = result.text
-                            copied = true
-                        } label: {
-                            Label(copied ? L10n.t("已复制") : L10n.t("复制"), systemImage: copied ? "checkmark" : "doc.on.doc")
-                        }
-                        .buttonStyle(.bordered)
-                        Spacer(minLength: 0)
-                    }
-                }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .navigationTitle(result.title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.t("关闭")) { dismiss() }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-    }
-}
-
-/// QLPreviewController 的 SwiftUI 包装
-struct QuickLookView: UIViewControllerRepresentable {
-    let url: URL
-    func makeUIViewController(context: Context) -> UINavigationController {
-        let q = QLPreviewController()
-        q.dataSource = context.coordinator
-        q.navigationItem.leftBarButtonItem = UIBarButtonItem(systemItem: .close, primaryAction: UIAction { [weak q] _ in q?.dismiss(animated: true) })
-        return UINavigationController(rootViewController: q)
-    }
-    func updateUIViewController(_ vc: UINavigationController, context: Context) {}
-    func makeCoordinator() -> Coordinator { Coordinator(url: url) }
-    final class Coordinator: NSObject, QLPreviewControllerDataSource {
-        let url: URL
-        init(url: URL) { self.url = url }
-        func numberOfPreviewItems(in controller: QLPreviewController) -> Int { 1 }
-        func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem { url as NSURL }
-    }
-}

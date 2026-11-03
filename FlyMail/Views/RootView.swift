@@ -26,7 +26,6 @@ struct RootView: View {
                     switch app.dockTab {
                     case .home: HomeView().transition(tabTransition)
                     case .mail: mailSplitView.transition(tabTransition)
-                    case .ai: AIChatView().transition(tabTransition)
                     case .my: MyView().transition(tabTransition)
                     }
                 } else {
@@ -77,7 +76,7 @@ struct RootView: View {
         .onChange(of: syncInterval) { _, _ in IdleManager.shared.restart(container: context.container) }
         .onChange(of: accounts.count) { _, _ in IdleManager.shared.start(container: context.container) }
         .onReceive(outboxTimer) { _ in
-            flushOutboxAndProcessAutoReply()
+            flushOutbox()
         }
         .onChange(of: phase) { _, p in
             handleScenePhase(p)
@@ -89,16 +88,14 @@ struct RootView: View {
         if p == .active {
             Task { await MailSyncService(modelContainer: context.container).syncAll() }
             IdleManager.shared.start(container: context.container)
-            Task { await AutoReplyService(container: context.container).processIfNeeded() }
         } else if p == .background {
             IdleManager.shared.stop()
         }
     }
 
-    private func flushOutboxAndProcessAutoReply() {
+    private func flushOutbox() {
         Task {
             await OutboxService(modelContainer: context.container).flushDue()
-            await AutoReplyService(container: context.container).processIfNeeded()
         }
     }
 
@@ -117,7 +114,6 @@ struct RootView: View {
     /// 这两种情况 dock 只会挡路，输入框应该顶格贴住键盘。
     private var dockVisible: Bool {
         sizeClass == .compact && showDock
-            && !app.isAIHistorySidebarOpen && !app.isAIComposerFocused
     }
 
     private var showDock: Bool {
@@ -150,7 +146,7 @@ struct RootView: View {
     }
 
     private func tabIndex(_ tab: AppState.DockTab) -> Int {
-        switch tab { case .home: 0; case .mail: 1; case .ai: 2; case .my: 3 }
+        switch tab { case .home: 0; case .mail: 1; case .my: 2 }
     }
 
     private func selectTab(_ tab: AppState.DockTab) {
@@ -162,7 +158,7 @@ struct RootView: View {
             app.selectedMailbox = .unified
             app.selectedMessage = nil
             compactColumn = .content
-        case .ai, .my: break
+        case .my: break
         }
         app.dockTab = tab
     }

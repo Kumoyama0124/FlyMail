@@ -16,7 +16,7 @@ struct DockBar: View {
     /// 松手 / 点按落在某一栏时调用
     let onSelect: (AppState.DockTab) -> Void
 
-    private static let tabs: [AppState.DockTab] = [.home, .mail, .ai, .my]
+    private static let tabs: [AppState.DockTab] = [.home, .mail, .my]
 
     private let inset: CGFloat = 2
     private let itemHeight: CGFloat = 56
@@ -159,7 +159,6 @@ struct DockBar: View {
         switch tab {
         case .home: "house"
         case .mail: "tray"
-        case .ai: "sparkles"
         case .my: "person.crop.circle"
         }
     }
@@ -168,7 +167,6 @@ struct DockBar: View {
         switch tab {
         case .home: "首页"
         case .mail: "邮件"
-        case .ai: "AI"
         case .my: "我的"
         }
     }

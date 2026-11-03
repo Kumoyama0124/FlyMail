@@ -1,4 +1,4 @@
-import SwiftUI
+﻿import SwiftUI
 import SwiftData
 import BackgroundTasks
 
@@ -58,12 +58,8 @@ final class AppState {
     var archiveNeedsFolder: MailMessage?
     var showingSettings = false
     /// 底部 dock 栏目：首页 / 邮件 / AI / 我的（“我的”和其他栏目一样是栏目，不是弹页）
-    enum DockTab { case home, mail, ai, my }
+    enum DockTab { case home, mail, my }
     var dockTab: DockTab = .home
-    /// AI 历史侧栏是否展开：展开时底部 dock 整条让位，不再压住侧栏右下角内容
-    var isAIHistorySidebarOpen = false
-    /// AI 输入框获得焦点（键盘弹出）时 dock 同样让位，输入框顶格贴住键盘
-    var isAIComposerFocused = false
     /// 语言切换时 +1：RootView 用它作 .id 强制重建整棵界面树，切语言立即生效
     var uiLanguageRev = 0
 }

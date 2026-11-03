@@ -1,4 +1,4 @@
-import SwiftUI
+﻿import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 
@@ -18,10 +18,6 @@ struct ComposeView: View {
     @State private var lastServerSaveTime = Date.distantPast
     @State private var confirmClose = false
     @State private var finished = false
-    // 写信助手
-    @State private var aiBusy = false
-    @State private var aiResult: AIComposeResult?
-    @State private var bodyBeforeAI: String?
     private let autosave = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -58,33 +54,10 @@ struct ComposeView: View {
                     Button("取消") { if isEmpty { discard() } else { confirmClose = true } }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    HStack(spacing: 14) {
-                        // 写信助手：对当前正文做润色/改语气/翻译等，结果可预览后替换
-                        Menu {
-                            Button { aiAssist("润色", "请润色以下邮件正文，使表达更清晰、自然、专业，不改变原意，保留原有分段。只输出润色后的正文。") } label: { Label("润色", systemImage: "wand.and.stars") }
-                            Button { aiAssist("改得更正式", "请把以下邮件正文改写得更正式、更专业，不改变原意。只输出改写后的正文。") } label: { Label("改得更正式", systemImage: "briefcase") }
-                            Button { aiAssist("改得更简洁", "请把以下邮件正文精简（大约一半篇幅），保留全部关键信息。只输出结果。") } label: { Label("改得更简洁", systemImage: "arrow.down.right.and.arrow.up.left") }
-                            Button { aiAssist("扩写", "请在不编造事实的前提下，把以下邮件正文扩写得更完整、更有说服力。只输出结果。") } label: { Label("扩写", systemImage: "arrow.up.left.and.arrow.down.right") }
-                            Divider()
-                            Button { aiAssist("翻译成英文", "请将以下邮件正文翻译成地道的英文，保留原有分段。只输出译文。") } label: { Label("翻译成英文", systemImage: "globe") }
-                            Button { aiAssist("翻译成中文", "请将以下邮件正文翻译成简体中文，保留原有分段。只输出译文。") } label: { Label("翻译成中文", systemImage: "globe.asia.australia") }
-                            Divider()
-                            Button { aiAssist("检查错别字", "请检查以下邮件正文中的错别字和语病，直接输出修正后的全文；没有问题就原样输出，不要解释。") } label: { Label("检查错别字", systemImage: "checkmark.circle") }
-                        } label: {
-                            if aiBusy { ProgressView() } else { Image(systemName: "sparkles") }
-                        }
-                        .disabled(aiBusy || draft.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        Button(scheduled ? "安排" : "发送") { Task { await send() } }
-                            .disabled(sending || draft.accountID == nil || MIMEParser.addresses(draft.to).isEmpty)
-                    }
+                }
                 }
             }
-            .sheet(item: $aiResult) { result in
-                AIComposeResultSheet(result: result, bodyBeforeAI: bodyBeforeAI) { restored in
-                    if let restored { draft.body = restored; bodyBeforeAI = nil }
-                    aiResult = nil
-                }
-            }
+
             .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { r in
                 for url in (try? r.get()) ?? [] {
                     guard url.startAccessingSecurityScopedResource() else { continue }
@@ -187,86 +160,5 @@ struct ComposeView: View {
         } catch { app.lastError = error.localizedDescription }
     }
 
-    /// 写信助手：对当前正文跑一次 AI，结果先预览，用户确认后再替换（可撤销）
-    private func aiAssist(_ title: String, _ instruction: String) {
-        let source = draft.body.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !source.isEmpty, !aiBusy else { return }
-        aiBusy = true
-        bodyBeforeAI = draft.body
-        let prompt = "\(instruction)\n\n以下是需要处理的邮件内容：\n\n\(draft.body)"
-        Task {
-            do {
-                let text = try await FlyMailAI.chat(messages: [AIChatMessage(role: "user", content: prompt)])
-                aiResult = AIComposeResult(title: title, text: text)
-            } catch {
-                app.lastError = error.localizedDescription
-                bodyBeforeAI = nil
-            }
-            aiBusy = false
-        }
-    }
-}
 
-struct AIComposeResult: Identifiable {
-    let id = UUID()
-    let title: String
-    let text: String
-}
-
-/// 写信助手结果预览：替换正文前先看一遍，替换错了可以撤销
-struct AIComposeResultSheet: View {
-    let result: AIComposeResult
-    let bodyBeforeAI: String?
-    /// 参数为撤销时要恢复的原文；传 nil 表示直接关闭
-    let onClose: (String?) -> Void
-    @State private var copied = false
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text(result.text)
-                        .font(.callout)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                    VStack(alignment: .leading, spacing: 10) {
-                        Button {
-                            UIPasteboard.general.string = result.text
-                            copied = true
-                        } label: {
-                            Label(copied ? "已复制" : "复制结果", systemImage: copied ? "checkmark" : "doc.on.doc")
-                        }
-                        .buttonStyle(.bordered)
-
-                        Button {
-                            UIPasteboard.general.string = result.text
-                            onClose(result.text)
-                        } label: {
-                            Label("替换正文", systemImage: "checkmark.circle.fill")
-                        }
-                        .buttonStyle(.borderedProminent)
-
-                        if let original = bodyBeforeAI {
-                            Button {
-                                onClose(original)
-                            } label: {
-                                Label("撤销，恢复替换前正文", systemImage: "arrow.uturn.backward")
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                    }
-                }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .navigationTitle(result.title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { onClose(nil) }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-    }
 }
