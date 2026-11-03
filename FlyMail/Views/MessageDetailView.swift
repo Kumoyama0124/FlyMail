@@ -1,4 +1,4 @@
-﻿import SwiftUI
+import SwiftUI
 import SwiftData
 import WebKit
 import QuickLook
@@ -299,3 +299,21 @@ Button("回复", systemImage: "arrowshape.turn.up.left") { reply(all: false) }
 }
 
 extension URL: Identifiable { public var id: String { absoluteString } }
+/// QLPreviewController 的 SwiftUI 包装
+struct QuickLookView: UIViewControllerRepresentable {
+    let url: URL
+    func makeUIViewController(context: Context) -> UINavigationController {
+        let q = QLPreviewController()
+        q.dataSource = context.coordinator
+        q.navigationItem.leftBarButtonItem = UIBarButtonItem(systemItem: .close, primaryAction: UIAction { [weak q] _ in q?.dismiss(animated: true) })
+        return UINavigationController(rootViewController: q)
+    }
+    func updateUIViewController(_ vc: UINavigationController, context: Context) {}
+    func makeCoordinator() -> Coordinator { Coordinator(url: url) }
+    final class Coordinator: NSObject, QLPreviewControllerDataSource {
+        let url: URL
+        init(url: URL) { self.url = url }
+        func numberOfPreviewItems(in controller: QLPreviewController) -> Int { 1 }
+        func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem { url as NSURL }
+    }
+}
