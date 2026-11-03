@@ -1,4 +1,4 @@
-﻿import SwiftUI
+import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 
@@ -54,7 +54,8 @@ struct ComposeView: View {
                     Button("取消") { if isEmpty { discard() } else { confirmClose = true } }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                }
+                    Button(scheduled ? "安排" : "发送") { Task { await send() } }
+                        .disabled(sending || draft.accountID == nil || MIMEParser.addresses(draft.to).isEmpty)
                 }
             }
 
